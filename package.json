@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "worker:ghost-check": "node workers/ghost-check.worker.js",
     "worker:enrich": "node workers/enrich.worker.js",
