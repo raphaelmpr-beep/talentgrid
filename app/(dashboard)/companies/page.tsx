@@ -65,6 +65,7 @@ export default function CompaniesPage() {
   const [sort, setSort] = React.useState<SortKey>("hiring_desc");
   const [minRevenue, setMinRevenue] = React.useState<number>(DEFAULT_MIN_REVENUE);
   const [maxRevenue, setMaxRevenue] = React.useState<number>(DEFAULT_MAX_REVENUE);
+  const [includeUnknownRevenue, setIncludeUnknownRevenue] = React.useState(false);
   const [minRevenueInput, setMinRevenueInput] = React.useState<string>(
     String(DEFAULT_MIN_REVENUE)
   );
@@ -87,6 +88,7 @@ export default function CompaniesPage() {
     if (!hiringOnly) params.set("isHiring", "false");
     params.set("minRevenue", String(minRevenue));
     params.set("maxRevenue", String(maxRevenue));
+    if (includeUnknownRevenue) params.set("includeUnknownRevenue", "true");
     fetch(`/api/companies?${params.toString()}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(`Failed: ${r.status}`);
@@ -105,7 +107,7 @@ export default function CompaniesPage() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQ, hiringOnly, minRevenue, maxRevenue]);
+  }, [debouncedQ, hiringOnly, minRevenue, maxRevenue, includeUnknownRevenue]);
 
   const filteredSorted = React.useMemo(() => {
     let rows = items;
@@ -204,6 +206,15 @@ export default function CompaniesPage() {
               className="w-32"
               aria-label="Maximum annual revenue"
             />
+            <label className="inline-flex items-center gap-2 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                checked={includeUnknownRevenue}
+                onChange={(e) => setIncludeUnknownRevenue(e.target.checked)}
+                className="h-4 w-4 rounded border-neutral-300"
+              />
+              Include unknown revenue
+            </label>
           </div>
           <div className="ml-auto flex items-center gap-2">
             <label

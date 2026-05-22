@@ -11,7 +11,15 @@ export async function GET(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const { page, pageSize, isHiring, q, minRevenue, maxRevenue } = parsed.data;
+  const {
+    page,
+    pageSize,
+    isHiring,
+    q,
+    minRevenue,
+    maxRevenue,
+    includeUnknownRevenue,
+  } = parsed.data;
 
   const supabase = await createClient();
   if (!supabase) return supabaseNotConfiguredResponse();
@@ -33,11 +41,17 @@ export async function GET(req: NextRequest) {
   //   - metadata.annual_revenue ∈ [minRevenue, maxRevenue], or
   //   - the optional metadata.revenue_min / revenue_max range overlaps the window.
   // Using `metadata->key` (jsonb) lets PostgREST compare numerically.
-  const overlapClause = [
+  const overlapBranches = [
     `and(metadata->annual_revenue.gte.${minRevenue},metadata->annual_revenue.lte.${maxRevenue})`,
     `and(metadata->revenue_max.gte.${minRevenue},metadata->revenue_min.lte.${maxRevenue})`,
-  ].join(",");
-  query = query.or(overlapClause);
+  ];
+  if (includeUnknownRevenue) {
+    // Companies with no revenue metadata at all (e.g. freshly imported, pre-enrichment).
+    overlapBranches.push(
+      "and(metadata->annual_revenue.is.null,metadata->revenue_min.is.null,metadata->revenue_max.is.null)"
+    );
+  }
+  query = query.or(overlapBranches.join(","));
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
@@ -52,6 +66,6 @@ export async function GET(req: NextRequest) {
     page,
     pageSize,
     total: count ?? 0,
-    filters: { minRevenue, maxRevenue },
+    filters: { minRevenue, maxRevenue, includeUnknownRevenue },
   });
 }
