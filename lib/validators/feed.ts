@@ -4,7 +4,7 @@ export const FEED_PROVIDERS = ["theirstack", "enrichment"] as const;
 export type FeedProvider = (typeof FEED_PROVIDERS)[number];
 
 export const feedSyncBodySchema = z.object({
-  dryRun: z.boolean().optional().default(true),
+  dryRun: z.boolean().optional().default(false),
   // Provider-specific knobs. Kept loose — each provider validates what it cares about.
   query: z.string().max(200).optional(),
   postedSince: z.string().datetime().optional(),

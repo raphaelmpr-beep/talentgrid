@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
   try {
     body = await req.json();
   } catch {
-    // empty body is fine — defaults to dryRun=true
+    // empty body is fine — defaults to dryRun=false (gated by admin secret)
   }
   const parsed = feedSyncBodySchema.safeParse(body ?? {});
   if (!parsed.success) {
