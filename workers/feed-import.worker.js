@@ -34,22 +34,76 @@ async function fetchJobs(input) {
     ? THEIRSTACK_API_BASE_URL
     : THEIRSTACK_API_BASE_URL + "/";
   const url = new URL("jobs/search", base);
-  if (input.query) url.searchParams.set("q", input.query);
-  if (input.postedSince) url.searchParams.set("posted_since", input.postedSince);
-  if (input.limit) url.searchParams.set("limit", String(input.limit));
-  if (input.page) url.searchParams.set("page", String(input.page));
+  const body = buildSearchBody(input || {});
   const res = await fetch(url.toString(), {
+    method: "POST",
     headers: {
       authorization: `Bearer ${THEIRSTACK_API_KEY}`,
       accept: "application/json",
+      "content-type": "application/json",
     },
+    body: JSON.stringify(body),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`TheirStack ${res.status}: ${body.slice(0, 200)}`);
   }
   const data = await res.json();
-  return { jobs: Array.isArray(data.jobs) ? data.jobs : [] };
+  const jobs = Array.isArray(data?.data)
+    ? data.data
+    : Array.isArray(data?.jobs)
+      ? data.jobs
+      : [];
+  return { jobs };
+}
+
+function buildSearchBody(input) {
+  const body = {
+    limit: clampLimit(input.limit),
+    posted_at_max_age_days: resolveMaxAgeDays(input),
+    job_country_code_or:
+      Array.isArray(input.jobCountryCodeOr) && input.jobCountryCodeOr.length > 0
+        ? input.jobCountryCodeOr
+        : ["US"],
+  };
+  if (typeof input.page === "number" && input.page > 1) {
+    body.page = input.page;
+  }
+  if (Array.isArray(input.jobTitleOr) && input.jobTitleOr.length > 0) {
+    body.job_title_or = input.jobTitleOr;
+  } else if (typeof input.query === "string" && input.query.trim().length > 0) {
+    body.job_title_or = [input.query.trim()];
+  }
+  if (
+    Array.isArray(input.companyDomainOr) &&
+    input.companyDomainOr.every((v) => typeof v === "string" && v.length > 0)
+  ) {
+    body.company_domain_or = input.companyDomainOr;
+  }
+  return body;
+}
+
+function clampLimit(limit) {
+  if (typeof limit !== "number" || !Number.isFinite(limit) || limit <= 0) return 20;
+  return Math.min(Math.floor(limit), 100);
+}
+
+function resolveMaxAgeDays(input) {
+  if (
+    typeof input.postedAtMaxAgeDays === "number" &&
+    Number.isFinite(input.postedAtMaxAgeDays) &&
+    input.postedAtMaxAgeDays > 0
+  ) {
+    return Math.floor(input.postedAtMaxAgeDays);
+  }
+  if (typeof input.postedSince === "string" && input.postedSince.length > 0) {
+    const since = Date.parse(input.postedSince);
+    if (!Number.isNaN(since)) {
+      const days = Math.ceil((Date.now() - since) / (1000 * 60 * 60 * 24));
+      if (days > 0) return days;
+    }
+  }
+  return 7;
 }
 
 async function importJobs(payload) {
