@@ -38,6 +38,10 @@ const ROLE_FAMILIES = [
 
 type SortKey = "hiring_desc" | "hiring_asc" | "name_asc" | "newest";
 
+const DEFAULT_MIN_REVENUE = 100_000_000;
+const DEFAULT_MAX_REVENUE = 600_000_000;
+const DEFAULT_PAGE_SIZE = 20;
+
 function hiringVolume(c: Company): number {
   const m = (c.metadata ?? {}) as Record<string, unknown>;
   const direct = m["open_roles_count"] ?? m["hiring_volume"] ?? m["open_roles"];
@@ -59,6 +63,14 @@ export default function CompaniesPage() {
   const [hiringOnly, setHiringOnly] = React.useState(true);
   const [family, setFamily] = React.useState("all");
   const [sort, setSort] = React.useState<SortKey>("hiring_desc");
+  const [minRevenue, setMinRevenue] = React.useState<number>(DEFAULT_MIN_REVENUE);
+  const [maxRevenue, setMaxRevenue] = React.useState<number>(DEFAULT_MAX_REVENUE);
+  const [minRevenueInput, setMinRevenueInput] = React.useState<string>(
+    String(DEFAULT_MIN_REVENUE)
+  );
+  const [maxRevenueInput, setMaxRevenueInput] = React.useState<string>(
+    String(DEFAULT_MAX_REVENUE)
+  );
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 250);
@@ -70,9 +82,11 @@ export default function CompaniesPage() {
     setLoading(true);
     setError(null);
     const params = new URLSearchParams();
-    params.set("pageSize", "50");
+    params.set("pageSize", String(DEFAULT_PAGE_SIZE));
     if (debouncedQ) params.set("q", debouncedQ);
     if (!hiringOnly) params.set("isHiring", "false");
+    params.set("minRevenue", String(minRevenue));
+    params.set("maxRevenue", String(maxRevenue));
     fetch(`/api/companies?${params.toString()}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(`Failed: ${r.status}`);
@@ -91,7 +105,7 @@ export default function CompaniesPage() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQ, hiringOnly]);
+  }, [debouncedQ, hiringOnly, minRevenue, maxRevenue]);
 
   const filteredSorted = React.useMemo(() => {
     let rows = items;
@@ -153,6 +167,44 @@ export default function CompaniesPage() {
             onChange={setFamily}
             options={ROLE_FAMILIES}
           />
+          <div className="flex items-center gap-2">
+            <label
+              htmlFor="minRevenue"
+              className="text-xs uppercase tracking-wide text-neutral-500"
+            >
+              Revenue $
+            </label>
+            <Input
+              id="minRevenue"
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={10_000_000}
+              value={minRevenueInput}
+              onChange={(e) => setMinRevenueInput(e.target.value)}
+              onBlur={() => {
+                const n = Number(minRevenueInput);
+                setMinRevenue(Number.isFinite(n) && n >= 0 ? n : DEFAULT_MIN_REVENUE);
+              }}
+              className="w-32"
+              aria-label="Minimum annual revenue"
+            />
+            <span className="text-neutral-400">–</span>
+            <Input
+              type="number"
+              inputMode="numeric"
+              min={0}
+              step={10_000_000}
+              value={maxRevenueInput}
+              onChange={(e) => setMaxRevenueInput(e.target.value)}
+              onBlur={() => {
+                const n = Number(maxRevenueInput);
+                setMaxRevenue(Number.isFinite(n) && n >= 0 ? n : DEFAULT_MAX_REVENUE);
+              }}
+              className="w-32"
+              aria-label="Maximum annual revenue"
+            />
+          </div>
           <div className="ml-auto flex items-center gap-2">
             <label
               htmlFor="sort"

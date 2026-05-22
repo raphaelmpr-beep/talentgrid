@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const { page, pageSize, isHiring, q } = parsed.data;
+  const { page, pageSize, isHiring, q, minRevenue, maxRevenue } = parsed.data;
 
   const supabase = await createClient();
   if (!supabase) return supabaseNotConfiguredResponse();
@@ -29,6 +29,16 @@ export async function GET(req: NextRequest) {
 
   if (q) query = query.ilike("name", `%${q}%`);
 
+  // Annual-revenue window. A company matches when either:
+  //   - metadata.annual_revenue ∈ [minRevenue, maxRevenue], or
+  //   - the optional metadata.revenue_min / revenue_max range overlaps the window.
+  // Using `metadata->key` (jsonb) lets PostgREST compare numerically.
+  const overlapClause = [
+    `and(metadata->annual_revenue.gte.${minRevenue},metadata->annual_revenue.lte.${maxRevenue})`,
+    `and(metadata->revenue_max.gte.${minRevenue},metadata->revenue_min.lte.${maxRevenue})`,
+  ].join(",");
+  query = query.or(overlapClause);
+
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
   const { data, error, count } = await query.range(from, to);
@@ -42,5 +52,6 @@ export async function GET(req: NextRequest) {
     page,
     pageSize,
     total: count ?? 0,
+    filters: { minRevenue, maxRevenue },
   });
 }

@@ -24,6 +24,15 @@ create table if not exists public.companies (
 create index if not exists companies_is_hiring_idx on public.companies (is_hiring);
 create index if not exists companies_name_idx on public.companies (name);
 
+-- Revenue convention (lives on companies.metadata jsonb):
+--   metadata.annual_revenue : integer USD point estimate (canonical)
+--   metadata.revenue_min    : integer USD lower bound when a range is known
+--   metadata.revenue_max    : integer USD upper bound when a range is known
+-- GET /api/companies filters with minRevenue / maxRevenue against these keys.
+create index if not exists companies_annual_revenue_idx
+  on public.companies (((metadata->>'annual_revenue')::bigint))
+  where metadata ? 'annual_revenue';
+
 -- Roles (job postings)
 create table if not exists public.roles (
   id              uuid primary key default gen_random_uuid(),
