@@ -17,6 +17,7 @@ export type {
 export {
   createEnrichmentClient,
   applyRevenueToMetadata,
+  metadataHasRevenue,
   EnrichmentNotConfiguredError,
   EnrichmentRequestError,
   EnrichmentTargetUrlError,
@@ -30,3 +31,12 @@ export type {
   PocEnrichmentResult,
   RevenueEstimate,
 } from "./enrichment";
+
+export { fetchWikipediaRevenue, parseInfoboxRevenueValue } from "./wikipedia";
+export type {
+  WikipediaLookupInput,
+  WikipediaLookupOptions,
+  WikipediaLookupResult,
+  WikipediaRevenueResult,
+  WikipediaNoDataResult,
+} from "./wikipedia";

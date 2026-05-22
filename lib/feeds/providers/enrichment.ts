@@ -206,3 +206,17 @@ export function applyRevenueToMetadata(
   }
   return base;
 }
+
+// True when companies.metadata has no usable revenue figure — neither a
+// point estimate nor either side of a range.
+export function metadataHasRevenue(
+  metadata: Record<string, unknown> | null | undefined
+): boolean {
+  if (!metadata) return false;
+  const keys = ["annual_revenue", "revenue_min", "revenue_max"] as const;
+  for (const k of keys) {
+    const v = metadata[k];
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) return true;
+  }
+  return false;
+}

@@ -9,6 +9,8 @@ import {
   mapJobToCompany,
   mapJobToRole,
   applyRevenueToMetadata,
+  metadataHasRevenue,
+  fetchWikipediaRevenue,
   TheirStackNotConfiguredError,
   EnrichmentNotConfiguredError,
   EnrichmentTargetUrlError,
@@ -16,6 +18,7 @@ import {
   type TheirStackSearchInput,
   type CompanyEnrichmentResult,
   type PocEnrichmentResult,
+  type WikipediaLookupResult,
 } from "@/lib/feeds/providers";
 import {
   feedEnrichCompanyQueue,
@@ -190,6 +193,7 @@ export type CompanyEnrichmentReport = {
   targetUrlSource?: "request" | "base_url_fallback";
   result?: CompanyEnrichmentResult;
   metadataPatched?: Record<string, unknown>;
+  wikipediaFallback?: WikipediaLookupResult;
   written: boolean;
   errors: string[];
 };
@@ -203,24 +207,13 @@ export async function runCompanyEnrichment(
 ): Promise<CompanyEnrichmentReport> {
   const client = createEnrichmentClient();
   const errors: string[] = [];
-
-  if (!client.config.configured) {
-    return {
-      provider: "enrichment",
-      dryRun: options.dryRun,
-      configured: false,
-      missing: client.config.missing,
-      companyId,
-      written: false,
-      errors: [],
-    };
-  }
+  const primaryConfigured = client.config.configured;
 
   if (!supabase) {
     return {
       provider: "enrichment",
       dryRun: true,
-      configured: true,
+      configured: primaryConfigured,
       companyId,
       written: false,
       errors: ["supabase client unavailable; treating as dry-run"],
@@ -237,7 +230,7 @@ export async function runCompanyEnrichment(
     return {
       provider: "enrichment",
       dryRun: options.dryRun,
-      configured: true,
+      configured: primaryConfigured,
       companyId,
       written: false,
       errors,
@@ -249,38 +242,26 @@ export async function runCompanyEnrichment(
     : "base_url_fallback";
 
   let result: CompanyEnrichmentResult | undefined;
-  try {
-    result = await client.enrichCompany({
-      domain: typeof company.domain === "string" ? company.domain : undefined,
-      name: String(company.name),
-      targetUrl: options.targetUrl,
-    });
-  } catch (err) {
-    if (err instanceof EnrichmentNotConfiguredError) {
-      return {
-        provider: "enrichment",
-        dryRun: options.dryRun,
-        configured: false,
-        missing: err.missing,
-        companyId,
-        written: false,
-        errors: [err.message],
-      };
+  if (primaryConfigured) {
+    try {
+      result = await client.enrichCompany({
+        domain: typeof company.domain === "string" ? company.domain : undefined,
+        name: String(company.name),
+        targetUrl: options.targetUrl,
+      });
+    } catch (err) {
+      if (err instanceof EnrichmentNotConfiguredError) {
+        // Fall through to the Wikipedia fallback rather than aborting.
+        errors.push(err.message);
+      } else if (err instanceof EnrichmentTargetUrlError) {
+        errors.push(`enrichment_target_url_required: ${err.message}`);
+      } else {
+        errors.push(err instanceof Error ? err.message : String(err));
+      }
     }
-    if (err instanceof EnrichmentTargetUrlError) {
-      return {
-        provider: "enrichment",
-        dryRun: options.dryRun,
-        configured: true,
-        companyId,
-        written: false,
-        errors: [`enrichment_target_url_required: ${err.message}`],
-      };
-    }
-    errors.push(err instanceof Error ? err.message : String(err));
   }
 
-  const metadataPatched = applyRevenueToMetadata(
+  let metadataPatched = applyRevenueToMetadata(
     (company.metadata as Record<string, unknown> | null) ?? null,
     result?.revenue
   );
@@ -294,16 +275,51 @@ export async function runCompanyEnrichment(
     };
   }
 
+  // Wikipedia fallback: only fire when the company's *patched* metadata still
+  // has no revenue and we have a usable company name. Failures here are
+  // non-fatal — they're recorded in `wikipediaFallback` for observability but
+  // never block the enrichment write.
+  let wikipediaFallback: WikipediaLookupResult | undefined;
+  const companyName = typeof company.name === "string" ? company.name : "";
+  if (!metadataHasRevenue(metadataPatched) && companyName.trim().length > 0) {
+    try {
+      wikipediaFallback = await fetchWikipediaRevenue({
+        name: companyName,
+        domain: typeof company.domain === "string" ? company.domain : undefined,
+      });
+      if (wikipediaFallback.status === "ok") {
+        metadataPatched = applyRevenueToMetadata(metadataPatched, {
+          annualRevenue: wikipediaFallback.annualRevenue,
+          currency: wikipediaFallback.currency,
+          confidence: "low",
+          source: wikipediaFallback.source,
+        });
+        metadataPatched.revenue_source = wikipediaFallback.source;
+        metadataPatched.revenue_source_url = wikipediaFallback.sourceUrl;
+        metadataPatched.revenue_source_label = wikipediaFallback.sourceLabel;
+        metadataPatched.revenue_raw = wikipediaFallback.raw;
+      }
+    } catch (err) {
+      // Defensive: fetchWikipediaRevenue is designed not to throw, but if a
+      // host environment surfaces something unexpected we still keep imports
+      // working.
+      errors.push(
+        `wikipedia_fallback_failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
   if (options.dryRun) {
     return {
       provider: "enrichment",
       dryRun: true,
-      configured: true,
+      configured: primaryConfigured,
       companyId,
       targetUrl: options.targetUrl,
       targetUrlSource,
       result,
       metadataPatched,
+      wikipediaFallback,
       written: false,
       errors,
     };
@@ -324,12 +340,13 @@ export async function runCompanyEnrichment(
   return {
     provider: "enrichment",
     dryRun: false,
-    configured: true,
+    configured: primaryConfigured,
     companyId,
     targetUrl: options.targetUrl,
     targetUrlSource,
     result,
     metadataPatched,
+    wikipediaFallback,
     written: !updErr,
     errors,
   };
