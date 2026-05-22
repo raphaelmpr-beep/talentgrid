@@ -22,17 +22,22 @@ export const companyUpdateSchema = companyCreateSchema.partial();
 export const DEFAULT_MIN_REVENUE = 100_000_000;
 export const DEFAULT_MAX_REVENUE = 600_000_000;
 
-export const companyQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(100).default(20),
-  isHiring: z
-    .union([z.literal("true"), z.literal("false")])
-    .optional()
-    .transform((v) => (v === undefined ? undefined : v === "true")),
-  q: z.string().max(200).optional(),
-  minRevenue: z.coerce.number().int().min(0).default(DEFAULT_MIN_REVENUE),
-  maxRevenue: z.coerce.number().int().min(0).default(DEFAULT_MAX_REVENUE),
-});
+export const companyQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    isHiring: z
+      .union([z.literal("true"), z.literal("false")])
+      .optional()
+      .transform((v) => (v === undefined ? undefined : v === "true")),
+    q: z.string().max(200).optional(),
+    minRevenue: z.coerce.number().int().min(0).default(DEFAULT_MIN_REVENUE),
+    maxRevenue: z.coerce.number().int().min(0).default(DEFAULT_MAX_REVENUE),
+  })
+  .refine((v) => v.minRevenue <= v.maxRevenue, {
+    message: "minRevenue must be less than or equal to maxRevenue",
+    path: ["minRevenue"],
+  });
 
 export type CompanyCreate = z.infer<typeof companyCreateSchema>;
 export type CompanyUpdate = z.infer<typeof companyUpdateSchema>;
