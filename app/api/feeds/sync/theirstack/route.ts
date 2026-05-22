@@ -17,7 +17,9 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   }
-  const { dryRun, query, postedSince, limit, page } = parsed.data;
+  const queryDryRun = req.nextUrl.searchParams.get("dryRun") === "true";
+  const { query, postedSince, limit, page } = parsed.data;
+  const dryRun = parsed.data.dryRun || queryDryRun;
 
   const gate = checkFeedAdmin(req.headers.get("x-feed-admin-secret"), { dryRun });
   if (!gate.ok) {
