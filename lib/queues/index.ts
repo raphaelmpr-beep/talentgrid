@@ -84,11 +84,15 @@ export type FeedImportJobsPayload = {
 
 export type FeedEnrichCompanyPayload = {
   companyId: string;
+  // Optional per-request enrichment endpoint. When absent the worker falls
+  // back to ENRICHMENT_API_BASE_URL.
+  targetUrl?: string;
 };
 
 export type FeedEnrichPocPayload = {
   companyId: string;
   roleId?: string;
+  targetUrl?: string;
 };
 
 export type FeedIngestSignalPayload = {

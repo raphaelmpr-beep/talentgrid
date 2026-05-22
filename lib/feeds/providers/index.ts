@@ -19,6 +19,7 @@ export {
   applyRevenueToMetadata,
   EnrichmentNotConfiguredError,
   EnrichmentRequestError,
+  EnrichmentTargetUrlError,
 } from "./enrichment";
 export type {
   EnrichmentClient,

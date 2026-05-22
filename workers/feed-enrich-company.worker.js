@@ -42,10 +42,13 @@ function applyRevenueToMetadata(metadata, revenue) {
   return base;
 }
 
-async function enrichCompany(companyId) {
+async function enrichCompany({ companyId, targetUrl }) {
   if (!supabase) return { skipped: "supabase_not_configured" };
-  if (!ENRICHMENT_API_KEY || !ENRICHMENT_API_BASE_URL) {
+  if (!ENRICHMENT_API_KEY) {
     return { skipped: "enrichment_not_configured" };
+  }
+  if (!targetUrl && !ENRICHMENT_API_BASE_URL) {
+    return { skipped: "enrichment_target_url_required" };
   }
 
   const { data: company, error } = await supabase
@@ -55,10 +58,16 @@ async function enrichCompany(companyId) {
     .single();
   if (error || !company) throw new Error(`company ${companyId} missing`);
 
-  const base = ENRICHMENT_API_BASE_URL.endsWith("/")
-    ? ENRICHMENT_API_BASE_URL
-    : ENRICHMENT_API_BASE_URL + "/";
-  const res = await fetch(new URL("companies/enrich", base).toString(), {
+  let endpoint;
+  if (targetUrl) {
+    endpoint = new URL(targetUrl).toString();
+  } else {
+    const base = ENRICHMENT_API_BASE_URL.endsWith("/")
+      ? ENRICHMENT_API_BASE_URL
+      : ENRICHMENT_API_BASE_URL + "/";
+    endpoint = new URL("companies/enrich", base).toString();
+  }
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: {
       authorization: `Bearer ${ENRICHMENT_API_KEY}`,
@@ -97,7 +106,7 @@ async function enrichCompany(companyId) {
 
 const worker = new Worker(
   QUEUE_NAMES.FEED_ENRICH_COMPANY,
-  async (job) => enrichCompany(job.data.companyId),
+  async (job) => enrichCompany(job.data || {}),
   { connection, concurrency: 3 }
 );
 

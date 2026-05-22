@@ -22,10 +22,13 @@ const supabase =
     ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
     : null;
 
-async function enrichPoc({ companyId }) {
+async function enrichPoc({ companyId, targetUrl }) {
   if (!supabase) return { skipped: "supabase_not_configured" };
-  if (!ENRICHMENT_API_KEY || !ENRICHMENT_API_BASE_URL) {
+  if (!ENRICHMENT_API_KEY) {
     return { skipped: "enrichment_not_configured" };
+  }
+  if (!targetUrl && !ENRICHMENT_API_BASE_URL) {
+    return { skipped: "enrichment_target_url_required" };
   }
 
   const { data: company, error } = await supabase
@@ -35,10 +38,16 @@ async function enrichPoc({ companyId }) {
     .single();
   if (error || !company) throw new Error(`company ${companyId} missing`);
 
-  const base = ENRICHMENT_API_BASE_URL.endsWith("/")
-    ? ENRICHMENT_API_BASE_URL
-    : ENRICHMENT_API_BASE_URL + "/";
-  const res = await fetch(new URL("pocs/enrich", base).toString(), {
+  let endpoint;
+  if (targetUrl) {
+    endpoint = new URL(targetUrl).toString();
+  } else {
+    const base = ENRICHMENT_API_BASE_URL.endsWith("/")
+      ? ENRICHMENT_API_BASE_URL
+      : ENRICHMENT_API_BASE_URL + "/";
+    endpoint = new URL("pocs/enrich", base).toString();
+  }
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: {
       authorization: `Bearer ${ENRICHMENT_API_KEY}`,

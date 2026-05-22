@@ -40,20 +40,32 @@ export function theirStackConfig(): ProviderConfig {
   };
 }
 
+// Enrichment provider config.
+//
+// Only ENRICHMENT_API_KEY is strictly required: the enrichment URL is
+// generally dynamic (per champion / profile / company), so callers supply a
+// per-request `targetUrl`. ENRICHMENT_API_BASE_URL is an optional fallback
+// used when no per-request URL is given (e.g. a generic
+// `${baseUrl}/companies/enrich` endpoint). When neither is available the
+// caller surfaces a clear `enrichment_target_url_required` error.
 export function enrichmentConfig(): ProviderConfig {
   const apiKey = readEnv("ENRICHMENT_API_KEY");
   const baseUrl = readEnv("ENRICHMENT_API_BASE_URL");
 
   const missing: string[] = [];
   if (!apiKey) missing.push("ENRICHMENT_API_KEY");
-  if (!baseUrl) missing.push("ENRICHMENT_API_BASE_URL");
 
   return {
     id: "enrichment",
     configured: missing.length === 0,
     missing,
-    credentials: apiKey && baseUrl ? { apiKey, baseUrl } : undefined,
-    meta: baseUrl ? { baseUrl } : undefined,
+    credentials: apiKey
+      ? { apiKey, ...(baseUrl ? { baseUrl } : {}) }
+      : undefined,
+    meta: {
+      ...(baseUrl ? { baseUrl } : {}),
+      baseUrlConfigured: baseUrl ? "true" : "false",
+    },
   };
 }
 

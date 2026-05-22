@@ -11,6 +11,7 @@ import {
   applyRevenueToMetadata,
   TheirStackNotConfiguredError,
   EnrichmentNotConfiguredError,
+  EnrichmentTargetUrlError,
   type TheirStackJob,
   type TheirStackSearchInput,
   type CompanyEnrichmentResult,
@@ -185,15 +186,19 @@ export type CompanyEnrichmentReport = {
   configured: boolean;
   missing?: string[];
   companyId: string;
+  targetUrl?: string;
+  targetUrlSource?: "request" | "base_url_fallback";
   result?: CompanyEnrichmentResult;
   metadataPatched?: Record<string, unknown>;
   written: boolean;
   errors: string[];
 };
 
+export type EnrichmentRunOptions = DryRunFlag & { targetUrl?: string };
+
 export async function runCompanyEnrichment(
   companyId: string,
-  options: DryRunFlag,
+  options: EnrichmentRunOptions,
   supabase: SupabaseLike | null
 ): Promise<CompanyEnrichmentReport> {
   const client = createEnrichmentClient();
@@ -239,11 +244,16 @@ export async function runCompanyEnrichment(
     };
   }
 
+  const targetUrlSource: "request" | "base_url_fallback" = options.targetUrl
+    ? "request"
+    : "base_url_fallback";
+
   let result: CompanyEnrichmentResult | undefined;
   try {
     result = await client.enrichCompany({
       domain: typeof company.domain === "string" ? company.domain : undefined,
       name: String(company.name),
+      targetUrl: options.targetUrl,
     });
   } catch (err) {
     if (err instanceof EnrichmentNotConfiguredError) {
@@ -255,6 +265,16 @@ export async function runCompanyEnrichment(
         companyId,
         written: false,
         errors: [err.message],
+      };
+    }
+    if (err instanceof EnrichmentTargetUrlError) {
+      return {
+        provider: "enrichment",
+        dryRun: options.dryRun,
+        configured: true,
+        companyId,
+        written: false,
+        errors: [`enrichment_target_url_required: ${err.message}`],
       };
     }
     errors.push(err instanceof Error ? err.message : String(err));
@@ -280,6 +300,8 @@ export async function runCompanyEnrichment(
       dryRun: true,
       configured: true,
       companyId,
+      targetUrl: options.targetUrl,
+      targetUrlSource,
       result,
       metadataPatched,
       written: false,
@@ -304,6 +326,8 @@ export async function runCompanyEnrichment(
     dryRun: false,
     configured: true,
     companyId,
+    targetUrl: options.targetUrl,
+    targetUrlSource,
     result,
     metadataPatched,
     written: !updErr,
@@ -317,12 +341,14 @@ export type PocEnrichmentReport = {
   configured: boolean;
   missing?: string[];
   companyId: string;
+  targetUrl?: string;
+  targetUrlSource?: "request" | "base_url_fallback";
   result?: PocEnrichmentResult;
   errors: string[];
 };
 
 export async function runPocEnrichment(
-  input: { companyId: string; roleId?: string } & DryRunFlag,
+  input: { companyId: string; roleId?: string; targetUrl?: string } & DryRunFlag,
   supabase: SupabaseLike | null
 ): Promise<PocEnrichmentReport> {
   const client = createEnrichmentClient();
@@ -359,16 +385,22 @@ export async function runPocEnrichment(
       errors: [`company ${input.companyId} not found`],
     };
   }
+  const targetUrlSource: "request" | "base_url_fallback" = input.targetUrl
+    ? "request"
+    : "base_url_fallback";
   try {
     const result = await client.enrichPoc({
       companyDomain: typeof company.domain === "string" ? company.domain : undefined,
       companyName: String(company.name),
+      targetUrl: input.targetUrl,
     });
     return {
       provider: "enrichment",
       dryRun: input.dryRun,
       configured: true,
       companyId: input.companyId,
+      targetUrl: input.targetUrl,
+      targetUrlSource,
       result,
       errors: [],
     };
@@ -383,11 +415,22 @@ export async function runPocEnrichment(
         errors: [err.message],
       };
     }
+    if (err instanceof EnrichmentTargetUrlError) {
+      return {
+        provider: "enrichment",
+        dryRun: input.dryRun,
+        configured: true,
+        companyId: input.companyId,
+        errors: [`enrichment_target_url_required: ${err.message}`],
+      };
+    }
     return {
       provider: "enrichment",
       dryRun: input.dryRun,
       configured: true,
       companyId: input.companyId,
+      targetUrl: input.targetUrl,
+      targetUrlSource,
       errors: [err instanceof Error ? err.message : String(err)],
     };
   }

@@ -15,9 +15,15 @@ export type RevenueEstimate = {
   source?: string;
 };
 
+// `targetUrl` is the canonical per-request URL field. When supplied the
+// enrichment client POSTs directly to that URL instead of resolving a path
+// against ENRICHMENT_API_BASE_URL. This is how callers point at a specific
+// champion/profile/company page (LinkedIn, the company's own site, …) whose
+// URL is only known at request time.
 export type CompanyEnrichmentInput = {
   domain?: string;
   name: string;
+  targetUrl?: string;
 };
 
 export type CompanyEnrichmentResult = {
@@ -42,6 +48,8 @@ export type PocEnrichmentInput = {
   companyName: string;
   // Optional role context — providers may use it to score relevance.
   roleTitle?: string;
+  // Canonical per-request URL (see CompanyEnrichmentInput.targetUrl).
+  targetUrl?: string;
 };
 
 export type PocEnrichmentResult = {
@@ -72,10 +80,31 @@ export function createEnrichmentClient(
     return config.credentials;
   }
 
-  async function call<T>(path: string, body: unknown): Promise<T> {
+  // Resolve the final endpoint URL for a request. `targetUrl` (per-request)
+  // wins; otherwise we fall back to `${ENRICHMENT_API_BASE_URL}/${path}`.
+  // If neither is available we throw a structured error so callers can
+  // surface a clear "missing target url" response instead of a generic 500.
+  function resolveEndpoint(path: string, targetUrl: string | undefined, baseUrl: string | undefined): string {
+    if (targetUrl && targetUrl.trim().length > 0) {
+      try {
+        return new URL(targetUrl).toString();
+      } catch {
+        throw new EnrichmentTargetUrlError(`invalid targetUrl: ${targetUrl}`);
+      }
+    }
+    if (!baseUrl) {
+      throw new EnrichmentTargetUrlError(
+        "no targetUrl supplied and ENRICHMENT_API_BASE_URL is not configured"
+      );
+    }
+    const base = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+    return new URL(path.replace(/^\//, ""), base).toString();
+  }
+
+  async function call<T>(path: string, targetUrl: string | undefined, body: unknown): Promise<T> {
     const creds = ensureReady();
-    const url = new URL(path.replace(/^\//, ""), creds.baseUrl.endsWith("/") ? creds.baseUrl : creds.baseUrl + "/");
-    const res = await fetchImpl(url.toString(), {
+    const endpoint = resolveEndpoint(path, targetUrl, creds.baseUrl);
+    const res = await fetchImpl(endpoint, {
       method: "POST",
       headers: {
         authorization: `Bearer ${creds.apiKey}`,
@@ -93,12 +122,13 @@ export function createEnrichmentClient(
   return {
     config,
     async enrichCompany(input) {
+      const { targetUrl, ...payload } = input;
       const data = await call<{
         revenue?: RevenueEstimate;
         industry?: string;
         size?: string;
         raw?: Record<string, unknown>;
-      }>("companies/enrich", input);
+      }>("companies/enrich", targetUrl, payload);
       return {
         revenue: data.revenue,
         industry: data.industry,
@@ -107,7 +137,12 @@ export function createEnrichmentClient(
       };
     },
     async enrichPoc(input) {
-      const data = await call<{ candidates?: PocCandidate[] }>("pocs/enrich", input);
+      const { targetUrl, ...payload } = input;
+      const data = await call<{ candidates?: PocCandidate[] }>(
+        "pocs/enrich",
+        targetUrl,
+        payload
+      );
       return { candidates: Array.isArray(data.candidates) ? data.candidates : [] };
     },
   };
@@ -124,6 +159,16 @@ export class EnrichmentRequestError extends Error {
   constructor(public status: number, public body: string) {
     super(`Enrichment provider request failed (${status})`);
     this.name = "EnrichmentRequestError";
+  }
+}
+
+// Thrown when neither a per-request targetUrl nor a fallback
+// ENRICHMENT_API_BASE_URL is available. Routes surface this as a 400/422
+// rather than treating the provider as un-configured.
+export class EnrichmentTargetUrlError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "EnrichmentTargetUrlError";
   }
 }
 
