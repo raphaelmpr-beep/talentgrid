@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, supabaseNotConfiguredResponse } from "@/lib/supabase/server";
 import { companyQuerySchema } from "@/lib/validators/company";
 
 export const runtime = "nodejs";
@@ -14,6 +14,7 @@ export async function GET(req: NextRequest) {
   const { page, pageSize, isHiring, q } = parsed.data;
 
   const supabase = await createClient();
+  if (!supabase) return supabaseNotConfiguredResponse();
   let query = supabase
     .from("companies")
     .select("*", { count: "exact" })

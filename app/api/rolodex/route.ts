@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, supabaseNotConfiguredResponse } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 
@@ -17,6 +17,7 @@ const rolodexCreateSchema = z.object({
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
+  if (!supabase) return supabaseNotConfiguredResponse();
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -47,6 +48,7 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
+  if (!supabase) return supabaseNotConfiguredResponse();
   const {
     data: { user },
   } = await supabase.auth.getUser();

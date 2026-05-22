@@ -48,6 +48,9 @@ export default async function CompanyDetailPage({
 }) {
   const { id } = await params;
   const supabase = await createClient();
+  if (!supabase) {
+    notFound();
+  }
 
   const [{ data: company, error: companyError }, { data: roles }] =
     await Promise.all([
