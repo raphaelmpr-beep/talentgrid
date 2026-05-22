@@ -22,6 +22,7 @@ type Company = {
   logo_url?: string | null;
   is_hiring: boolean;
   metadata?: Record<string, unknown> | null;
+  open_roles_count?: number;
   created_at: string;
 };
 
@@ -43,6 +44,8 @@ const DEFAULT_MAX_REVENUE = 600_000_000;
 const DEFAULT_PAGE_SIZE = 20;
 
 function hiringVolume(c: Company): number {
+  // Prefer the live count returned by the API (computed from the roles table).
+  if (typeof c.open_roles_count === "number") return c.open_roles_count;
   const m = (c.metadata ?? {}) as Record<string, unknown>;
   const direct = m["open_roles_count"] ?? m["hiring_volume"] ?? m["open_roles"];
   return typeof direct === "number" ? direct : 0;

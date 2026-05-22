@@ -25,9 +25,13 @@ export async function POST(req: NextRequest) {
   const { companyId, roleId, targetUrl } = parsed.data;
   const dryRun = parsed.data.dryRun || queryDryRun;
 
-  const gate = checkFeedAdmin(req.headers.get("x-feed-admin-secret"), { dryRun });
-  if (!gate.ok) {
-    return NextResponse.json({ error: gate.reason }, { status: gate.status });
+  // Explicit dry-runs are public/safe: no writes, no queue side effects.
+  // Only enforce the admin gate for real (mutating) runs.
+  if (!dryRun) {
+    const gate = checkFeedAdmin(req.headers.get("x-feed-admin-secret"), { dryRun });
+    if (!gate.ok) {
+      return NextResponse.json({ error: gate.reason }, { status: gate.status });
+    }
   }
 
   if (!companyId) {
