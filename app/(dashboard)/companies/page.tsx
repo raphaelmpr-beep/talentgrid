@@ -94,7 +94,18 @@ export default function CompaniesPage() {
     if (includeUnknownRevenue) params.set("includeUnknownRevenue", "true");
     fetch(`/api/companies?${params.toString()}`)
       .then(async (r) => {
-        if (!r.ok) throw new Error(`Failed: ${r.status}`);
+        if (!r.ok) {
+          let message = `Failed: ${r.status}`;
+          try {
+            const body = (await r.json()) as { error?: unknown };
+            if (typeof body?.error === "string" && body.error.trim().length > 0) {
+              message = `${message} — ${body.error}`;
+            }
+          } catch {
+            // Ignore non-JSON error bodies and fall back to status-only message.
+          }
+          throw new Error(message);
+        }
         return (await r.json()) as Page<Company>;
       })
       .then((page) => {
