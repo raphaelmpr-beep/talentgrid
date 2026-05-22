@@ -1,0 +1,435 @@
+// Orchestration helpers that the API routes and workers share. Every function
+// supports a `dryRun` mode: it performs all read-side work (config lookup,
+// provider call when keys are present, mapping) but skips Supabase writes and
+// BullMQ enqueues. This is what keeps the scaffold safe before any live keys.
+
+import {
+  createTheirStackClient,
+  createEnrichmentClient,
+  mapJobToCompany,
+  mapJobToRole,
+  applyRevenueToMetadata,
+  TheirStackNotConfiguredError,
+  EnrichmentNotConfiguredError,
+  type TheirStackJob,
+  type TheirStackSearchInput,
+  type CompanyEnrichmentResult,
+  type PocEnrichmentResult,
+} from "@/lib/feeds/providers";
+import {
+  feedEnrichCompanyQueue,
+  feedEnrichPocQueue,
+  feedIngestSignalQueue,
+  feedImportJobsQueue,
+  ghostCheckQueue,
+  type FeedIngestSignalPayload,
+} from "@/lib/queues";
+
+export type DryRunFlag = { dryRun: boolean };
+
+type SupabaseLike = {
+  from: (table: string) => {
+    upsert: (
+      values: Record<string, unknown>,
+      options?: { onConflict?: string }
+    ) => {
+      select: (columns: string) => {
+        single: () => Promise<{ data: { id: string } | null; error: { message: string } | null }>;
+      };
+    };
+    update: (values: Record<string, unknown>) => {
+      eq: (column: string, value: string) => Promise<{ error: { message: string } | null }>;
+    };
+    select: (columns: string) => {
+      eq: (column: string, value: string) => {
+        single: () => Promise<{
+          data: Record<string, unknown> | null;
+          error: { message: string } | null;
+        }>;
+      };
+    };
+    insert: (values: Record<string, unknown>) => Promise<{ error: { message: string } | null }>;
+  };
+};
+
+export type ImportJobsReport = {
+  provider: "theirstack";
+  dryRun: boolean;
+  configured: boolean;
+  missing?: string[];
+  fetched: number;
+  mapped: Array<{
+    external_id: string;
+    company: ReturnType<typeof mapJobToCompany>;
+    role: ReturnType<typeof mapJobToRole>;
+  }>;
+  written: number;
+  enqueued: { companyEnrich: number; ghostCheck: number };
+  errors: string[];
+};
+
+export async function runTheirStackImport(
+  input: TheirStackSearchInput & DryRunFlag,
+  supabase: SupabaseLike | null
+): Promise<ImportJobsReport> {
+  const client = createTheirStackClient();
+  if (!client.config.configured) {
+    return {
+      provider: "theirstack",
+      dryRun: input.dryRun,
+      configured: false,
+      missing: client.config.missing,
+      fetched: 0,
+      mapped: [],
+      written: 0,
+      enqueued: { companyEnrich: 0, ghostCheck: 0 },
+      errors: [],
+    };
+  }
+
+  let jobs: TheirStackJob[] = [];
+  const errors: string[] = [];
+  try {
+    const res = await client.searchJobs(input);
+    jobs = res.jobs;
+  } catch (err) {
+    if (err instanceof TheirStackNotConfiguredError) {
+      return {
+        provider: "theirstack",
+        dryRun: input.dryRun,
+        configured: false,
+        missing: err.missing,
+        fetched: 0,
+        mapped: [],
+        written: 0,
+        enqueued: { companyEnrich: 0, ghostCheck: 0 },
+        errors: [err.message],
+      };
+    }
+    errors.push(err instanceof Error ? err.message : String(err));
+  }
+
+  const mapped = jobs.map((job) => ({
+    external_id: job.external_id,
+    company: mapJobToCompany(job),
+    role: mapJobToRole(job),
+  }));
+
+  if (input.dryRun || !supabase) {
+    return {
+      provider: "theirstack",
+      dryRun: true,
+      configured: true,
+      fetched: jobs.length,
+      mapped,
+      written: 0,
+      enqueued: { companyEnrich: 0, ghostCheck: 0 },
+      errors,
+    };
+  }
+
+  let written = 0;
+  let companyEnrichEnqueued = 0;
+  let ghostCheckEnqueued = 0;
+  const companyQ = feedEnrichCompanyQueue();
+  const ghostQ = ghostCheckQueue();
+
+  for (const item of mapped) {
+    const { data: company, error: companyErr } = await supabase
+      .from("companies")
+      .upsert(item.company, { onConflict: "domain" })
+      .select("id")
+      .single();
+    if (companyErr || !company) {
+      errors.push(`company upsert failed: ${companyErr?.message ?? "missing"}`);
+      continue;
+    }
+    const { data: role, error: roleErr } = await supabase
+      .from("roles")
+      .upsert(
+        { ...item.role, company_id: company.id },
+        { onConflict: "id" }
+      )
+      .select("id")
+      .single();
+    if (roleErr || !role) {
+      errors.push(`role upsert failed: ${roleErr?.message ?? "missing"}`);
+      continue;
+    }
+    written += 1;
+    if (companyQ) {
+      await companyQ.add("enrich", { companyId: company.id });
+      companyEnrichEnqueued += 1;
+    }
+    if (ghostQ) {
+      await ghostQ.add("check", { roleId: role.id });
+      ghostCheckEnqueued += 1;
+    }
+  }
+
+  return {
+    provider: "theirstack",
+    dryRun: false,
+    configured: true,
+    fetched: jobs.length,
+    mapped,
+    written,
+    enqueued: { companyEnrich: companyEnrichEnqueued, ghostCheck: ghostCheckEnqueued },
+    errors,
+  };
+}
+
+export type CompanyEnrichmentReport = {
+  provider: "enrichment";
+  dryRun: boolean;
+  configured: boolean;
+  missing?: string[];
+  companyId: string;
+  result?: CompanyEnrichmentResult;
+  metadataPatched?: Record<string, unknown>;
+  written: boolean;
+  errors: string[];
+};
+
+export async function runCompanyEnrichment(
+  companyId: string,
+  options: DryRunFlag,
+  supabase: SupabaseLike | null
+): Promise<CompanyEnrichmentReport> {
+  const client = createEnrichmentClient();
+  const errors: string[] = [];
+
+  if (!client.config.configured) {
+    return {
+      provider: "enrichment",
+      dryRun: options.dryRun,
+      configured: false,
+      missing: client.config.missing,
+      companyId,
+      written: false,
+      errors: [],
+    };
+  }
+
+  if (!supabase) {
+    return {
+      provider: "enrichment",
+      dryRun: true,
+      configured: true,
+      companyId,
+      written: false,
+      errors: ["supabase client unavailable; treating as dry-run"],
+    };
+  }
+
+  const { data: company, error: readErr } = await supabase
+    .from("companies")
+    .select("id, name, domain, metadata")
+    .eq("id", companyId)
+    .single();
+  if (readErr || !company) {
+    errors.push(`company ${companyId} not found`);
+    return {
+      provider: "enrichment",
+      dryRun: options.dryRun,
+      configured: true,
+      companyId,
+      written: false,
+      errors,
+    };
+  }
+
+  let result: CompanyEnrichmentResult | undefined;
+  try {
+    result = await client.enrichCompany({
+      domain: typeof company.domain === "string" ? company.domain : undefined,
+      name: String(company.name),
+    });
+  } catch (err) {
+    if (err instanceof EnrichmentNotConfiguredError) {
+      return {
+        provider: "enrichment",
+        dryRun: options.dryRun,
+        configured: false,
+        missing: err.missing,
+        companyId,
+        written: false,
+        errors: [err.message],
+      };
+    }
+    errors.push(err instanceof Error ? err.message : String(err));
+  }
+
+  const metadataPatched = applyRevenueToMetadata(
+    (company.metadata as Record<string, unknown> | null) ?? null,
+    result?.revenue
+  );
+  if (result?.raw) {
+    metadataPatched.enrichment = {
+      ...(typeof metadataPatched.enrichment === "object" && metadataPatched.enrichment
+        ? (metadataPatched.enrichment as Record<string, unknown>)
+        : {}),
+      ...result.raw,
+      enrichedAt: new Date().toISOString(),
+    };
+  }
+
+  if (options.dryRun) {
+    return {
+      provider: "enrichment",
+      dryRun: true,
+      configured: true,
+      companyId,
+      result,
+      metadataPatched,
+      written: false,
+      errors,
+    };
+  }
+
+  const update: Record<string, unknown> = {
+    metadata: metadataPatched,
+    updated_at: new Date().toISOString(),
+  };
+  if (result?.industry) update.industry = result.industry;
+  if (result?.size) update.size = result.size;
+  const { error: updErr } = await supabase
+    .from("companies")
+    .update(update)
+    .eq("id", companyId);
+  if (updErr) errors.push(`company update failed: ${updErr.message}`);
+
+  return {
+    provider: "enrichment",
+    dryRun: false,
+    configured: true,
+    companyId,
+    result,
+    metadataPatched,
+    written: !updErr,
+    errors,
+  };
+}
+
+export type PocEnrichmentReport = {
+  provider: "enrichment";
+  dryRun: boolean;
+  configured: boolean;
+  missing?: string[];
+  companyId: string;
+  result?: PocEnrichmentResult;
+  errors: string[];
+};
+
+export async function runPocEnrichment(
+  input: { companyId: string; roleId?: string } & DryRunFlag,
+  supabase: SupabaseLike | null
+): Promise<PocEnrichmentReport> {
+  const client = createEnrichmentClient();
+  if (!client.config.configured) {
+    return {
+      provider: "enrichment",
+      dryRun: input.dryRun,
+      configured: false,
+      missing: client.config.missing,
+      companyId: input.companyId,
+      errors: [],
+    };
+  }
+  if (!supabase) {
+    return {
+      provider: "enrichment",
+      dryRun: true,
+      configured: true,
+      companyId: input.companyId,
+      errors: ["supabase client unavailable; treating as dry-run"],
+    };
+  }
+  const { data: company, error: readErr } = await supabase
+    .from("companies")
+    .select("id, name, domain")
+    .eq("id", input.companyId)
+    .single();
+  if (readErr || !company) {
+    return {
+      provider: "enrichment",
+      dryRun: input.dryRun,
+      configured: true,
+      companyId: input.companyId,
+      errors: [`company ${input.companyId} not found`],
+    };
+  }
+  try {
+    const result = await client.enrichPoc({
+      companyDomain: typeof company.domain === "string" ? company.domain : undefined,
+      companyName: String(company.name),
+    });
+    return {
+      provider: "enrichment",
+      dryRun: input.dryRun,
+      configured: true,
+      companyId: input.companyId,
+      result,
+      errors: [],
+    };
+  } catch (err) {
+    if (err instanceof EnrichmentNotConfiguredError) {
+      return {
+        provider: "enrichment",
+        dryRun: input.dryRun,
+        configured: false,
+        missing: err.missing,
+        companyId: input.companyId,
+        errors: [err.message],
+      };
+    }
+    return {
+      provider: "enrichment",
+      dryRun: input.dryRun,
+      configured: true,
+      companyId: input.companyId,
+      errors: [err instanceof Error ? err.message : String(err)],
+    };
+  }
+}
+
+export type SignalIngestReport = {
+  dryRun: boolean;
+  written: boolean;
+  enqueued: boolean;
+  errors: string[];
+};
+
+export async function runSignalIngest(
+  payload: FeedIngestSignalPayload,
+  options: DryRunFlag,
+  supabase: SupabaseLike | null
+): Promise<SignalIngestReport> {
+  const errors: string[] = [];
+  if (options.dryRun || !supabase) {
+    const q = feedIngestSignalQueue();
+    return { dryRun: true, written: false, enqueued: !!q, errors };
+  }
+  const { error } = await supabase.from("signals").insert({
+    kind: payload.kind,
+    title: payload.title,
+    detail: payload.detail ?? null,
+    href: payload.href ?? null,
+    company_id: payload.companyId ?? null,
+    role_id: payload.roleId ?? null,
+    metadata: payload.metadata ?? {},
+  });
+  if (error) errors.push(error.message);
+  return { dryRun: false, written: !error, enqueued: false, errors };
+}
+
+// Helper used by the API route to push the import work onto BullMQ rather than
+// running it inline. Returns null if Redis isn't configured.
+export async function enqueueImportJobs(
+  payload: TheirStackSearchInput
+): Promise<{ id: string } | null> {
+  const q = feedImportJobsQueue();
+  if (!q) return null;
+  const job = await q.add("import", payload);
+  return { id: String(job.id) };
+}

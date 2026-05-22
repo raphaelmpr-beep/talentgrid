@@ -9,7 +9,11 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "worker:ghost-check": "node workers/ghost-check.worker.js",
-    "worker:enrich": "node workers/enrich.worker.js"
+    "worker:enrich": "node workers/enrich.worker.js",
+    "worker:feed-import": "node workers/feed-import.worker.js",
+    "worker:feed-enrich-company": "node workers/feed-enrich-company.worker.js",
+    "worker:feed-enrich-poc": "node workers/feed-enrich-poc.worker.js",
+    "worker:signal-ingest": "node workers/signal-ingest.worker.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

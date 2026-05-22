@@ -112,8 +112,10 @@ export async function POST(req: NextRequest) {
 
     results.push({ roleId: role.id, companyId: company.id });
 
-    await ghostCheckQueue().add("check", { roleId: role.id });
-    await enrichQueue().add("enrich", { companyId: company.id });
+    const ghostQ = ghostCheckQueue();
+    const enrichQ = enrichQueue();
+    if (ghostQ) await ghostQ.add("check", { roleId: role.id });
+    if (enrichQ) await enrichQ.add("enrich", { companyId: company.id });
   }
 
   return NextResponse.json({ received: results.length, results });

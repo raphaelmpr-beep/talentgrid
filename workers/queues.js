@@ -1,13 +1,19 @@
 const { Queue } = require("bullmq");
 const IORedis = require("ioredis");
 
-const connection = new IORedis(process.env.REDIS_URL || "redis://127.0.0.1:6379", {
+const REDIS_URL = process.env.REDIS_URL || "redis://127.0.0.1:6379";
+
+const connection = new IORedis(REDIS_URL, {
   maxRetriesPerRequest: null,
 });
 
 const QUEUE_NAMES = Object.freeze({
   GHOST_CHECK: "ghost-check",
   ENRICH: "enrich",
+  FEED_IMPORT_JOBS: "feed-import-jobs",
+  FEED_ENRICH_COMPANY: "feed-enrich-company",
+  FEED_ENRICH_POC: "feed-enrich-poc",
+  FEED_INGEST_SIGNAL: "feed-ingest-signal",
 });
 
 const defaultJobOptions = {
@@ -17,19 +23,24 @@ const defaultJobOptions = {
   removeOnFail: { age: 24 * 3600 },
 };
 
-const ghostCheckQueue = new Queue(QUEUE_NAMES.GHOST_CHECK, {
-  connection,
-  defaultJobOptions,
-});
+function queue(name) {
+  return new Queue(name, { connection, defaultJobOptions });
+}
 
-const enrichQueue = new Queue(QUEUE_NAMES.ENRICH, {
-  connection,
-  defaultJobOptions,
-});
+const ghostCheckQueue = queue(QUEUE_NAMES.GHOST_CHECK);
+const enrichQueue = queue(QUEUE_NAMES.ENRICH);
+const feedImportJobsQueue = queue(QUEUE_NAMES.FEED_IMPORT_JOBS);
+const feedEnrichCompanyQueue = queue(QUEUE_NAMES.FEED_ENRICH_COMPANY);
+const feedEnrichPocQueue = queue(QUEUE_NAMES.FEED_ENRICH_POC);
+const feedIngestSignalQueue = queue(QUEUE_NAMES.FEED_INGEST_SIGNAL);
 
 module.exports = {
   connection,
   QUEUE_NAMES,
   ghostCheckQueue,
   enrichQueue,
+  feedImportJobsQueue,
+  feedEnrichCompanyQueue,
+  feedEnrichPocQueue,
+  feedIngestSignalQueue,
 };

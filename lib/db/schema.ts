@@ -112,6 +112,26 @@ export const rolodexEntries = pgTable(
   })
 );
 
+export const signals = pgTable(
+  "signals",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    kind: text("kind").notNull(),
+    title: text("title").notNull(),
+    detail: text("detail"),
+    href: text("href"),
+    companyId: uuid("company_id").references(() => companies.id, { onDelete: "cascade" }),
+    roleId: uuid("role_id").references(() => roles.id, { onDelete: "cascade" }),
+    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    createdAtIdx: index("signals_created_at_idx").on(t.createdAt),
+    companyIdx: index("signals_company_id_idx").on(t.companyId),
+    kindIdx: index("signals_kind_idx").on(t.kind),
+  })
+);
+
 export type Company = typeof companies.$inferSelect;
 export type NewCompany = typeof companies.$inferInsert;
 export type Role = typeof roles.$inferSelect;
@@ -120,3 +140,5 @@ export type Favorite = typeof favorites.$inferSelect;
 export type NewFavorite = typeof favorites.$inferInsert;
 export type RolodexEntry = typeof rolodexEntries.$inferSelect;
 export type NewRolodexEntry = typeof rolodexEntries.$inferInsert;
+export type Signal = typeof signals.$inferSelect;
+export type NewSignal = typeof signals.$inferInsert;
