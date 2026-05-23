@@ -35,7 +35,7 @@ export const COMPANY_ROLE_FAMILIES = [
 export const companyQuerySchema = z
   .object({
     page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    pageSize: z.coerce.number().int().min(1).max(1000).default(20),
     family: z.enum(COMPANY_ROLE_FAMILIES).optional(),
     isHiring: z
       .union([z.literal("true"), z.literal("false")])

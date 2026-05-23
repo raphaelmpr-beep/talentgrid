@@ -42,6 +42,7 @@ export const roles = pgTable(
     companyId: uuid("company_id")
       .notNull()
       .references(() => companies.id, { onDelete: "cascade" }),
+    externalId: text("external_id"),
     title: text("title").notNull(),
     description: text("description"),
     location: text("location"),
@@ -64,6 +65,10 @@ export const roles = pgTable(
     companyIdx: index("roles_company_id_idx").on(t.companyId),
     activeIdx: index("roles_is_active_idx").on(t.isActive),
     ghostScoreIdx: index("roles_ghost_score_idx").on(t.ghostScore),
+    companyExternalIdUq: uniqueIndex("roles_company_external_id_uq").on(
+      t.companyId,
+      t.externalId
+    ),
   })
 );
 
