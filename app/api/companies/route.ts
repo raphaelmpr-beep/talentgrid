@@ -40,22 +40,32 @@ function normaliseRoleFamily(raw: unknown): string | null {
   const value = raw.trim().toLowerCase();
   if (!value) return null;
 
-  if (value.includes("engineer") || value.includes("developer")) return "engineering";
-  if (value.includes("product")) return "product";
-  if (value.includes("design")) return "design";
-  if (value.includes("sales") || value.includes("account executive") || value === "ae") {
-    return "sales";
-  }
+  if (value.includes("full") && (value.includes("stack") || value.includes("full-stack"))) return "fullstack";
+  if (value.includes("frontend") || value.includes("front-end") || value.includes("front end")) return "frontend";
+  if (value.includes("backend") || value.includes("back-end") || value.includes("back end")) return "backend";
   if (
-    value.includes("operations") ||
-    value.includes("ops") ||
-    value.includes("finance") ||
-    value.includes("hr") ||
-    value.includes("people") ||
-    value.includes("talent")
-  ) {
-    return "ops";
-  }
+    value.includes("machine learning") ||
+    value.includes("deep learning") ||
+    value.includes("nlp") ||
+    value.includes("computer vision") ||
+    (value.includes("ml") && value.includes("engineer")) ||
+    (value.includes("ai") && value.includes("engineer"))
+  ) return "ml";
+  if (
+    (value.includes("data") && (value.includes("engineer") || value.includes("scientist") || value.includes("analyst"))) ||
+    value.includes("analytics engineer")
+  ) return "data";
+  if (
+    value.includes("devops") ||
+    value.includes("dev-ops") ||
+    value.includes("sre") ||
+    value.includes("site reliability") ||
+    value.includes("infrastructure") ||
+    value.includes("platform engineer") ||
+    value.includes("cloud engineer")
+  ) return "devops";
+  if (value.includes("mobile") || value.includes("ios") || value.includes("android")) return "mobile";
+  if (value.includes("engineer") || value.includes("developer") || value.includes("software")) return "engineer";
 
   return null;
 }
@@ -63,17 +73,16 @@ function normaliseRoleFamily(raw: unknown): string | null {
 function inferRoleFamilyFromTitle(title: string | null | undefined): string | null {
   if (!title) return null;
   const t = title.toLowerCase();
-  if (/engineer|developer|software|frontend|backend|full\s*stack|devops|sre|data\s*engineer/.test(t)) {
-    return "engineering";
-  }
-  if (/product\s*(manager|owner)|\bpm\b/.test(t)) return "product";
-  if (/designer|ux|ui|product\s*design/.test(t)) return "design";
-  if (/sales|account\s*executive|account\s*manager|business\s*development/.test(t)) {
-    return "sales";
-  }
-  if (/operations|ops|finance|accounting|hr|people\s*ops|talent\s*acquisition|recruit/.test(t)) {
-    return "ops";
-  }
+
+  if (/full[\s-]?stack/.test(t)) return "fullstack";
+  if (/frontend|front[\s-]end/.test(t)) return "frontend";
+  if (/backend|back[\s-]end/.test(t)) return "backend";
+  if (/machine\s+learning|deep\s+learning|\bnlp\b|computer\s+vision|ml\s+engineer|ai\s+engineer/.test(t)) return "ml";
+  if (/data\s+(engineer|scientist|analyst|science)|analytics\s+engineer/.test(t)) return "data";
+  if (/devops|dev[\s-]ops|site\s+reliability|\bsre\b|infrastructure\s+eng|platform\s+eng|cloud\s+eng/.test(t)) return "devops";
+  if (/\bmobile\b|\bios\b|\bandroid\b|react\s+native/.test(t)) return "mobile";
+  if (/software\s+engineer|software\s+developer|\bengineer\b|\bdeveloper\b/.test(t)) return "engineer";
+
   return null;
 }
 

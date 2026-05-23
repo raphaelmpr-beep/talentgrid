@@ -47,11 +47,14 @@ type Page<T> = { data: T[]; page: number; pageSize: number; total: number };
 
 const ROLE_FAMILIES = [
   { value: "all", label: "All" },
-  { value: "engineering", label: "Engineering" },
-  { value: "product", label: "Product" },
-  { value: "design", label: "Design" },
-  { value: "sales", label: "Sales" },
-  { value: "ops", label: "Ops" },
+  { value: "engineer", label: "Software Engineer" },
+  { value: "frontend", label: "Frontend" },
+  { value: "backend", label: "Backend" },
+  { value: "fullstack", label: "Full Stack" },
+  { value: "devops", label: "DevOps / SRE" },
+  { value: "data", label: "Data" },
+  { value: "mobile", label: "Mobile" },
+  { value: "ml", label: "ML / AI" },
 ];
 
 type SortKey = "hiring_desc" | "hiring_asc" | "name_asc" | "newest";
