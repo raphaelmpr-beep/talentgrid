@@ -35,6 +35,44 @@ type EmbeddedRole = {
   role_family?: string | null;
 };
 
+type SupabaseClient = NonNullable<Awaited<ReturnType<typeof createClient>>>;
+
+const ROLE_BATCH_SIZE = 1000;
+
+async function fetchAllActiveRoles(
+  supabase: SupabaseClient,
+  columns: string,
+  companyIds?: string[]
+) {
+  if (companyIds && companyIds.length === 0) return { data: [] as RoleRow[], error: null };
+
+  const rows: RoleRow[] = [];
+  let from = 0;
+
+  while (true) {
+    let query = supabase
+      .from("roles")
+      .select(columns)
+      .eq("is_active", true)
+      .lt("ghost_score", 70)
+      .order("id", { ascending: true })
+      .range(from, from + ROLE_BATCH_SIZE - 1);
+
+    if (companyIds) query = query.in("company_id", companyIds);
+
+    const { data, error } = await query;
+    if (error) return { data: null, error };
+
+    const chunk = (data ?? []) as RoleRow[];
+    rows.push(...chunk);
+
+    if (chunk.length < ROLE_BATCH_SIZE) break;
+    from += ROLE_BATCH_SIZE;
+  }
+
+  return { data: rows, error: null };
+}
+
 function normaliseRoleFamily(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const value = raw.trim().toLowerCase();
@@ -126,12 +164,10 @@ export async function GET(req: NextRequest) {
   let familyCompanyIds: string[] | null = null;
   let activeRoles: RoleRow[] = [];
   if (enforceOpenRoles || family) {
-    const { data: activeRoleRows, error: rolesErr } = await supabase
-      .from("roles")
-      .select("company_id,title,metadata")
-      .eq("is_active", true)
-      .lt("ghost_score", 70)
-      .limit(10000);
+    const { data: activeRoleRows, error: rolesErr } = await fetchAllActiveRoles(
+      supabase,
+      "company_id,title,metadata"
+    );
 
     if (rolesErr) {
       return NextResponse.json({ error: rolesErr.message }, { status: 500 });
@@ -228,21 +264,23 @@ export async function GET(req: NextRequest) {
   const familyCounts = new Map<string, Record<string, number>>();
   const rolesMap = new Map<string, EmbeddedRole[]>();
   if (ids.length > 0) {
-    const { data: roleRows, error: rolesErr } = await supabase
-      .from("roles")
-      .select(
-        "id,company_id,title,location,remote,employment_type,seniority,salary_min,salary_max,url,ghost_score,posted_at,metadata"
-      )
-      .in("company_id", ids)
-      .eq("is_active", true)
-      .lt("ghost_score", 70)
-      .order("posted_at", { ascending: false, nullsFirst: false });
+    const { data: roleRows, error: rolesErr } = await fetchAllActiveRoles(
+      supabase,
+      "id,company_id,title,location,remote,employment_type,seniority,salary_min,salary_max,url,ghost_score,posted_at,metadata",
+      ids
+    );
 
     if (rolesErr) {
       return NextResponse.json({ error: rolesErr.message }, { status: 500 });
     }
 
-    for (const r of (roleRows ?? []) as RoleRow[]) {
+    const sortedRoleRows = [...((roleRows ?? []) as RoleRow[])].sort((a, b) => {
+      const aPosted = a.posted_at ? Date.parse(a.posted_at) : 0;
+      const bPosted = b.posted_at ? Date.parse(b.posted_at) : 0;
+      return bPosted - aPosted;
+    });
+
+    for (const r of sortedRoleRows) {
       if (!r.company_id || !r.id) continue;
       counts.set(r.company_id, (counts.get(r.company_id) ?? 0) + 1);
 

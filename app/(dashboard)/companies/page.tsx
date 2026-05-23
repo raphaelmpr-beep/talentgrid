@@ -64,7 +64,13 @@ const DEFAULT_MAX_REVENUE = 10_000_000_000;
 const DEFAULT_PAGE_SIZE = 20;
 const ROLES_PREVIEW_LIMIT = 10;
 
-function hiringVolume(c: Company): number {
+function hiringVolume(c: Company, family: string): number {
+  if (family !== "all") {
+    const familyCount = c.role_families?.[family];
+    if (typeof familyCount === "number") return familyCount;
+    return (c.roles ?? []).filter((r) => r.role_family === family).length;
+  }
+
   if (typeof c.open_roles_count === "number") return c.open_roles_count;
   const m = (c.metadata ?? {}) as Record<string, unknown>;
   const direct = m["open_roles_count"] ?? m["hiring_volume"] ?? m["open_roles"];
@@ -310,9 +316,9 @@ export default function CompaniesPage() {
     sorted.sort((a, b) => {
       switch (sort) {
         case "hiring_desc":
-          return hiringVolume(b) - hiringVolume(a);
+          return hiringVolume(b, family) - hiringVolume(a, family);
         case "hiring_asc":
-          return hiringVolume(a) - hiringVolume(b);
+          return hiringVolume(a, family) - hiringVolume(b, family);
         case "name_asc":
           return a.name.localeCompare(b.name);
         case "newest":
@@ -321,7 +327,7 @@ export default function CompaniesPage() {
     });
 
     return sorted;
-  }, [items, sort]);
+  }, [items, sort, family]);
 
   return (
     <div className="space-y-6">
@@ -450,12 +456,12 @@ export default function CompaniesPage() {
         <>
           <div className="space-y-4">
             {filteredSorted.map((c) => {
-              const volume = hiringVolume(c);
               const allRoles = c.roles ?? [];
               const visibleRoles =
                 family === "all"
                   ? allRoles
                   : allRoles.filter((r) => r.role_family === family);
+              const volume = hiringVolume(c, family);
 
               return (
                 <Card key={c.id} className="overflow-hidden">
