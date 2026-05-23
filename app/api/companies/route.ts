@@ -5,9 +5,34 @@ import { companyQuerySchema } from "@/lib/validators/company";
 export const runtime = "nodejs";
 
 type RoleRow = {
+  id?: string | null;
   company_id: string | null;
   title?: string | null;
+  location?: string | null;
+  remote?: boolean | null;
+  employment_type?: string | null;
+  seniority?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  url?: string | null;
+  ghost_score?: number | null;
+  posted_at?: string | null;
   metadata?: Record<string, unknown> | null;
+};
+
+type EmbeddedRole = {
+  id: string;
+  title: string;
+  location?: string | null;
+  remote?: boolean | null;
+  employment_type?: string | null;
+  seniority?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  url?: string | null;
+  ghost_score?: number | null;
+  posted_at?: string | null;
+  role_family?: string | null;
 };
 
 function normaliseRoleFamily(raw: unknown): string | null {
@@ -15,22 +40,32 @@ function normaliseRoleFamily(raw: unknown): string | null {
   const value = raw.trim().toLowerCase();
   if (!value) return null;
 
-  if (value.includes("engineer") || value.includes("developer")) return "engineering";
-  if (value.includes("product")) return "product";
-  if (value.includes("design")) return "design";
-  if (value.includes("sales") || value.includes("account executive") || value === "ae") {
-    return "sales";
-  }
+  if (value.includes("full") && (value.includes("stack") || value.includes("full-stack"))) return "fullstack";
+  if (value.includes("frontend") || value.includes("front-end") || value.includes("front end")) return "frontend";
+  if (value.includes("backend") || value.includes("back-end") || value.includes("back end")) return "backend";
   if (
-    value.includes("operations") ||
-    value.includes("ops") ||
-    value.includes("finance") ||
-    value.includes("hr") ||
-    value.includes("people") ||
-    value.includes("talent")
-  ) {
-    return "ops";
-  }
+    value.includes("machine learning") ||
+    value.includes("deep learning") ||
+    value.includes("nlp") ||
+    value.includes("computer vision") ||
+    (value.includes("ml") && value.includes("engineer")) ||
+    (value.includes("ai") && value.includes("engineer"))
+  ) return "ml";
+  if (
+    (value.includes("data") && (value.includes("engineer") || value.includes("scientist") || value.includes("analyst"))) ||
+    value.includes("analytics engineer")
+  ) return "data";
+  if (
+    value.includes("devops") ||
+    value.includes("dev-ops") ||
+    value.includes("sre") ||
+    value.includes("site reliability") ||
+    value.includes("infrastructure") ||
+    value.includes("platform engineer") ||
+    value.includes("cloud engineer")
+  ) return "devops";
+  if (value.includes("mobile") || value.includes("ios") || value.includes("android")) return "mobile";
+  if (value.includes("engineer") || value.includes("developer") || value.includes("software")) return "engineer";
 
   return null;
 }
@@ -38,17 +73,16 @@ function normaliseRoleFamily(raw: unknown): string | null {
 function inferRoleFamilyFromTitle(title: string | null | undefined): string | null {
   if (!title) return null;
   const t = title.toLowerCase();
-  if (/engineer|developer|software|frontend|backend|full\s*stack|devops|sre|data\s*engineer/.test(t)) {
-    return "engineering";
-  }
-  if (/product\s*(manager|owner)|\bpm\b/.test(t)) return "product";
-  if (/designer|ux|ui|product\s*design/.test(t)) return "design";
-  if (/sales|account\s*executive|account\s*manager|business\s*development/.test(t)) {
-    return "sales";
-  }
-  if (/operations|ops|finance|accounting|hr|people\s*ops|talent\s*acquisition|recruit/.test(t)) {
-    return "ops";
-  }
+
+  if (/full[\s-]?stack/.test(t)) return "fullstack";
+  if (/frontend|front[\s-]end/.test(t)) return "frontend";
+  if (/backend|back[\s-]end/.test(t)) return "backend";
+  if (/machine\s+learning|deep\s+learning|\bnlp\b|computer\s+vision|ml\s+engineer|ai\s+engineer/.test(t)) return "ml";
+  if (/data\s+(engineer|scientist|analyst|science)|analytics\s+engineer/.test(t)) return "data";
+  if (/devops|dev[\s-]ops|site\s+reliability|\bsre\b|infrastructure\s+eng|platform\s+eng|cloud\s+eng/.test(t)) return "devops";
+  if (/\bmobile\b|\bios\b|\bandroid\b|react\s+native/.test(t)) return "mobile";
+  if (/software\s+engineer|software\s+developer|\bengineer\b|\bdeveloper\b/.test(t)) return "engineer";
+
   return null;
 }
 
@@ -96,7 +130,7 @@ export async function GET(req: NextRequest) {
       .from("roles")
       .select("company_id,title,metadata")
       .eq("is_active", true)
-      .lt("ghost_score", 40)
+      .lt("ghost_score", 70)
       .limit(10000);
 
     if (rolesErr) {
@@ -192,28 +226,52 @@ export async function GET(req: NextRequest) {
 
   const counts = new Map<string, number>();
   const familyCounts = new Map<string, Record<string, number>>();
+  const rolesMap = new Map<string, EmbeddedRole[]>();
   if (ids.length > 0) {
     const { data: roleRows, error: rolesErr } = await supabase
       .from("roles")
-      .select("company_id,title,metadata")
+      .select(
+        "id,company_id,title,location,remote,employment_type,seniority,salary_min,salary_max,url,ghost_score,posted_at,metadata"
+      )
       .in("company_id", ids)
       .eq("is_active", true)
-      .lt("ghost_score", 40);
+      .lt("ghost_score", 70)
+      .order("posted_at", { ascending: false, nullsFirst: false });
 
     if (rolesErr) {
       return NextResponse.json({ error: rolesErr.message }, { status: 500 });
     }
 
     for (const r of (roleRows ?? []) as RoleRow[]) {
-      if (!r.company_id) continue;
+      if (!r.company_id || !r.id) continue;
       counts.set(r.company_id, (counts.get(r.company_id) ?? 0) + 1);
 
       const roleFamily = getRoleFamily(r);
-      if (!roleFamily) continue;
 
-      const current = familyCounts.get(r.company_id) ?? {};
-      current[roleFamily] = (current[roleFamily] ?? 0) + 1;
-      familyCounts.set(r.company_id, current);
+      if (roleFamily) {
+        const current = familyCounts.get(r.company_id) ?? {};
+        current[roleFamily] = (current[roleFamily] ?? 0) + 1;
+        familyCounts.set(r.company_id, current);
+      }
+
+      const embedded: EmbeddedRole = {
+        id: r.id,
+        title: r.title ?? "",
+        location: r.location,
+        remote: r.remote,
+        employment_type: r.employment_type,
+        seniority: r.seniority,
+        salary_min: r.salary_min,
+        salary_max: r.salary_max,
+        url: r.url,
+        ghost_score: r.ghost_score,
+        posted_at: r.posted_at,
+        role_family: roleFamily,
+      };
+
+      const list = rolesMap.get(r.company_id) ?? [];
+      list.push(embedded);
+      rolesMap.set(r.company_id, list);
     }
   }
 
@@ -221,6 +279,7 @@ export async function GET(req: NextRequest) {
     ...r,
     open_roles_count: counts.get(String(r.id)) ?? 0,
     role_families: familyCounts.get(String(r.id)) ?? {},
+    roles: rolesMap.get(String(r.id)) ?? [],
   }));
 
   return NextResponse.json({

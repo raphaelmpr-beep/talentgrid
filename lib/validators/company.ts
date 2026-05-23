@@ -22,11 +22,14 @@ export const companyUpdateSchema = companyCreateSchema.partial();
 export const DEFAULT_MIN_REVENUE = 0;
 export const DEFAULT_MAX_REVENUE = 10_000_000_000;
 export const COMPANY_ROLE_FAMILIES = [
-  "engineering",
-  "product",
-  "design",
-  "sales",
-  "ops",
+  "frontend",
+  "backend",
+  "fullstack",
+  "devops",
+  "data",
+  "mobile",
+  "ml",
+  "engineer",
 ] as const;
 
 export const companyQuerySchema = z
