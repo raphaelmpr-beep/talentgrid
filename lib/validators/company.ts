@@ -19,8 +19,8 @@ export const companyUpdateSchema = companyCreateSchema.partial();
 // `annual_revenue` (USD, integer). When a company reports a range instead
 // of a point estimate, `revenue_min`/`revenue_max` may also be present and
 // are considered overlapping with the requested window.
-export const DEFAULT_MIN_REVENUE = 100_000_000;
-export const DEFAULT_MAX_REVENUE = 600_000_000;
+export const DEFAULT_MIN_REVENUE = 0;
+export const DEFAULT_MAX_REVENUE = 10_000_000_000;
 
 export const companyQuerySchema = z
   .object({
