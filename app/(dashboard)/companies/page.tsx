@@ -39,12 +39,11 @@ const ROLE_FAMILIES = [
 
 type SortKey = "hiring_desc" | "hiring_asc" | "name_asc" | "newest";
 
-const DEFAULT_MIN_REVENUE = 100_000_000;
-const DEFAULT_MAX_REVENUE = 600_000_000;
+const DEFAULT_MIN_REVENUE = 0;
+const DEFAULT_MAX_REVENUE = 10_000_000_000;
 const DEFAULT_PAGE_SIZE = 20;
 
 function hiringVolume(c: Company): number {
-  // Prefer the live count returned by the API (computed from the roles table).
   if (typeof c.open_roles_count === "number") return c.open_roles_count;
   const m = (c.metadata ?? {}) as Record<string, unknown>;
   const direct = m["open_roles_count"] ?? m["hiring_volume"] ?? m["open_roles"];
@@ -60,6 +59,7 @@ function rolesByFamily(c: Company): Record<string, number> {
 export default function CompaniesPage() {
   const [items, setItems] = React.useState<Company[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [loadingMore, setLoadingMore] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [q, setQ] = React.useState("");
   const [debouncedQ, setDebouncedQ] = React.useState("");
@@ -75,6 +75,10 @@ export default function CompaniesPage() {
   const [maxRevenueInput, setMaxRevenueInput] = React.useState<string>(
     String(DEFAULT_MAX_REVENUE)
   );
+  const [page, setPage] = React.useState(1);
+  const [total, setTotal] = React.useState(0);
+  const [hasMore, setHasMore] = React.useState(false);
+  const loadMoreRef = React.useRef<HTMLDivElement | null>(null);
 
   React.useEffect(() => {
     const t = setTimeout(() => setDebouncedQ(q.trim()), 250);
@@ -82,35 +86,83 @@ export default function CompaniesPage() {
   }, [q]);
 
   React.useEffect(() => {
+    setItems([]);
+    setTotal(0);
+    setHasMore(false);
+    setPage(1);
+  }, [debouncedQ, hiringOnly, minRevenue, maxRevenue, includeUnknownRevenue]);
+
+  React.useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+
+    if (page === 1) {
+      setLoading(true);
+    } else {
+      setLoadingMore(true);
+    }
     setError(null);
+
     const params = new URLSearchParams();
+    params.set("page", String(page));
     params.set("pageSize", String(DEFAULT_PAGE_SIZE));
     if (debouncedQ) params.set("q", debouncedQ);
     if (!hiringOnly) params.set("isHiring", "false");
     params.set("minRevenue", String(minRevenue));
     params.set("maxRevenue", String(maxRevenue));
     if (includeUnknownRevenue) params.set("includeUnknownRevenue", "true");
+
     fetch(`/api/companies?${params.toString()}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(`Failed: ${r.status}`);
         return (await r.json()) as Page<Company>;
       })
-      .then((page) => {
-        if (!cancelled) setItems(page.data ?? []);
+      .then((nextPage) => {
+        if (cancelled) return;
+
+        const nextItems = nextPage.data ?? [];
+        setTotal(nextPage.total ?? 0);
+        setHasMore(page * DEFAULT_PAGE_SIZE < (nextPage.total ?? 0));
+
+        setItems((prev) => {
+          if (page === 1) return nextItems;
+          const seen = new Set(prev.map((c) => c.id));
+          const appended = nextItems.filter((c) => !seen.has(c.id));
+          return [...prev, ...appended];
+        });
       })
       .catch((e: unknown) => {
-        if (!cancelled)
-          setError(e instanceof Error ? e.message : "Failed to load");
+        if (!cancelled) setError(e instanceof Error ? e.message : "Failed to load");
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setLoadingMore(false);
+        }
       });
+
     return () => {
       cancelled = true;
     };
-  }, [debouncedQ, hiringOnly, minRevenue, maxRevenue, includeUnknownRevenue]);
+  }, [page, debouncedQ, hiringOnly, minRevenue, maxRevenue, includeUnknownRevenue]);
+
+  React.useEffect(() => {
+    if (!hasMore || loading || loadingMore || error) return;
+    const el = loadMoreRef.current;
+    if (!el) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        if (!entry?.isIntersecting) return;
+        observer.unobserve(entry.target);
+        setPage((p) => p + 1);
+      },
+      { rootMargin: "300px 0px" }
+    );
+
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore, error, items.length]);
 
   const filteredSorted = React.useMemo(() => {
     let rows = items;
@@ -120,6 +172,7 @@ export default function CompaniesPage() {
         return (fam[family] ?? 0) > 0;
       });
     }
+
     const sorted = [...rows];
     sorted.sort((a, b) => {
       switch (sort) {
@@ -130,11 +183,10 @@ export default function CompaniesPage() {
         case "name_asc":
           return a.name.localeCompare(b.name);
         case "newest":
-          return (
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          );
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
       }
     });
+
     return sorted;
   }, [items, family, sort]);
 
@@ -158,6 +210,7 @@ export default function CompaniesPage() {
             className="max-w-xs"
             aria-label="Search companies"
           />
+
           <label className="inline-flex items-center gap-2 text-sm text-neutral-700">
             <input
               type="checkbox"
@@ -167,16 +220,11 @@ export default function CompaniesPage() {
             />
             Hiring only
           </label>
-          <ToggleGroup
-            value={family}
-            onChange={setFamily}
-            options={ROLE_FAMILIES}
-          />
+
+          <ToggleGroup value={family} onChange={setFamily} options={ROLE_FAMILIES} />
+
           <div className="flex items-center gap-2">
-            <label
-              htmlFor="minRevenue"
-              className="text-xs uppercase tracking-wide text-neutral-500"
-            >
+            <label htmlFor="minRevenue" className="text-xs uppercase tracking-wide text-neutral-500">
               Revenue $
             </label>
             <Input
@@ -194,7 +242,7 @@ export default function CompaniesPage() {
               className="w-32"
               aria-label="Minimum annual revenue"
             />
-            <span className="text-neutral-400">–</span>
+            <span className="text-neutral-400">-</span>
             <Input
               type="number"
               inputMode="numeric"
@@ -206,7 +254,7 @@ export default function CompaniesPage() {
                 const n = Number(maxRevenueInput);
                 setMaxRevenue(Number.isFinite(n) && n >= 0 ? n : DEFAULT_MAX_REVENUE);
               }}
-              className="w-32"
+              className="w-40"
               aria-label="Maximum annual revenue"
             />
             <label className="inline-flex items-center gap-2 text-sm text-neutral-700">
@@ -219,21 +267,15 @@ export default function CompaniesPage() {
               Include unknown revenue
             </label>
           </div>
+
           <div className="ml-auto flex items-center gap-2">
-            <label
-              htmlFor="sort"
-              className="text-xs uppercase tracking-wide text-neutral-500"
-            >
+            <label htmlFor="sort" className="text-xs uppercase tracking-wide text-neutral-500">
               Sort
             </label>
-            <Select
-              id="sort"
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-            >
+            <Select id="sort" value={sort} onChange={(e) => setSort(e.target.value as SortKey)}>
               <option value="hiring_desc">Hiring volume ↓</option>
               <option value="hiring_asc">Hiring volume ↑</option>
-              <option value="name_asc">Name A–Z</option>
+              <option value="name_asc">Name A-Z</option>
               <option value="newest">Newest</option>
             </Select>
           </div>
@@ -257,76 +299,86 @@ export default function CompaniesPage() {
           No companies match your filters.
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredSorted.map((c) => {
-            const volume = hiringVolume(c);
-            const families = rolesByFamily(c);
-            const topFamilies = Object.entries(families)
-              .sort((a, b) => b[1] - a[1])
-              .slice(0, 3);
-            return (
-              <Link
-                key={c.id}
-                href={`/companies/${c.id}`}
-                className="group block"
-              >
-                <Card className="h-full transition-shadow group-hover:shadow-md">
-                  <CardContent className="p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-neutral-100 text-sm font-semibold text-neutral-600">
-                        {c.logo_url ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={c.logo_url}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : (
-                          c.name.slice(0, 1).toUpperCase()
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <h2 className="truncate text-base font-semibold">
-                            {c.name}
-                          </h2>
-                          {c.is_hiring && (
-                            <Badge variant="success">Hiring</Badge>
+        <>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {filteredSorted.map((c) => {
+              const volume = hiringVolume(c);
+              const families = rolesByFamily(c);
+              const topFamilies = Object.entries(families)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 3);
+
+              return (
+                <Link key={c.id} href={`/companies/${c.id}`} className="group block">
+                  <Card className="h-full transition-shadow group-hover:shadow-md">
+                    <CardContent className="p-4">
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-neutral-100 text-sm font-semibold text-neutral-600">
+                          {c.logo_url ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={c.logo_url} alt="" className="h-full w-full object-cover" />
+                          ) : (
+                            c.name.slice(0, 1).toUpperCase()
                           )}
                         </div>
-                        <p className="truncate text-xs text-neutral-500">
-                          {c.industry ?? c.domain ?? c.location ?? ""}
-                        </p>
-                      </div>
-                    </div>
-                    {c.description && (
-                      <p className="mt-3 line-clamp-2 text-sm text-neutral-600">
-                        {c.description}
-                      </p>
-                    )}
-                    <div className="mt-4 flex items-center justify-between">
-                      <div className="flex flex-wrap gap-1">
-                        {topFamilies.map(([fam, n]) => (
-                          <Badge key={fam} variant="outline">
-                            {fam} · {n}
-                          </Badge>
-                        ))}
-                      </div>
-                      <div className="text-right">
-                        <div className="text-lg font-semibold tabular-nums">
-                          {formatCompactNumber(volume)}
-                        </div>
-                        <div className="text-[10px] uppercase tracking-wide text-neutral-500">
-                          open roles
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <h2 className="truncate text-base font-semibold">{c.name}</h2>
+                            {c.is_hiring && <Badge variant="success">Hiring</Badge>}
+                          </div>
+                          <p className="truncate text-xs text-neutral-500">
+                            {c.industry ?? c.domain ?? c.location ?? ""}
+                          </p>
                         </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </Link>
-            );
-          })}
-        </div>
+
+                      {c.description && (
+                        <p className="mt-3 line-clamp-2 text-sm text-neutral-600">{c.description}</p>
+                      )}
+
+                      <div className="mt-4 flex items-center justify-between">
+                        <div className="flex flex-wrap gap-1">
+                          {topFamilies.map(([fam, n]) => (
+                            <Badge key={fam} variant="outline">
+                              {fam} · {n}
+                            </Badge>
+                          ))}
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-semibold tabular-nums">
+                            {formatCompactNumber(volume)}
+                          </div>
+                          <div className="text-[10px] uppercase tracking-wide text-neutral-500">
+                            open roles
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
+          </div>
+
+          <div className="flex items-center justify-between text-xs text-neutral-500">
+            <span>
+              Showing {items.length} of {total}
+            </span>
+            {hasMore && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => p + 1)}
+                disabled={loadingMore}
+              >
+                {loadingMore ? "Loading..." : "Load more"}
+              </Button>
+            )}
+          </div>
+
+          {hasMore && <div ref={loadMoreRef} className="h-6" aria-hidden="true" />}
+        </>
       )}
     </div>
   );
