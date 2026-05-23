@@ -61,7 +61,7 @@ type SortKey = "hiring_desc" | "hiring_asc" | "name_asc" | "newest";
 
 const DEFAULT_MIN_REVENUE = 0;
 const DEFAULT_MAX_REVENUE = 10_000_000_000;
-const DEFAULT_PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 100;
 const ROLES_PREVIEW_LIMIT = 10;
 
 function hiringVolume(c: Company, family: string): number {
@@ -419,8 +419,11 @@ export default function CompaniesPage() {
               value={String(pageSize)}
               onChange={(e) => setPageSize(Number(e.target.value) || DEFAULT_PAGE_SIZE)}
             >
-              <option value="20">20</option>
               <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200">200</option>
+              <option value="500">500</option>
+              <option value="1000">All</option>
             </Select>
 
             <label htmlFor="sort" className="text-xs uppercase tracking-wide text-neutral-500">

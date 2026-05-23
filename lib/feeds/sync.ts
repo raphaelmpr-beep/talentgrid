@@ -152,7 +152,7 @@ export async function runTheirStackImport(
       .from("roles")
       .upsert(
         { ...item.role, company_id: company.id },
-        { onConflict: "id" }
+        { onConflict: "company_id,external_id" }
       )
       .select("id")
       .single();

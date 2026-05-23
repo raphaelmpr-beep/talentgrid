@@ -308,6 +308,7 @@ export type MappedCompany = {
 };
 
 export type MappedRole = {
+  external_id: string;
   title: string;
   description: string | null;
   location: string | null;
@@ -338,6 +339,7 @@ export function mapJobToCompany(job: TheirStackJob): MappedCompany {
 
 export function mapJobToRole(job: TheirStackJob): MappedRole {
   return {
+    external_id: job.external_id,
     title: job.title,
     description: job.description ?? null,
     location: job.location ?? null,

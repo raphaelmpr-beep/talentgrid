@@ -89,6 +89,7 @@ export async function POST(req: NextRequest) {
       .upsert(
         {
           company_id: company.id,
+          external_id: job.external_id ?? null,
           title: job.title,
           description: job.description ?? null,
           location: job.location ?? null,
@@ -103,7 +104,7 @@ export async function POST(req: NextRequest) {
           metadata: { external_id: job.external_id },
           is_active: true,
         },
-        { onConflict: "id" }
+        { onConflict: "company_id,external_id" }
       )
       .select("id")
       .single();
