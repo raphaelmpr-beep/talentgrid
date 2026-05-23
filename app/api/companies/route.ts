@@ -5,9 +5,34 @@ import { companyQuerySchema } from "@/lib/validators/company";
 export const runtime = "nodejs";
 
 type RoleRow = {
+  id?: string | null;
   company_id: string | null;
   title?: string | null;
+  location?: string | null;
+  remote?: boolean | null;
+  employment_type?: string | null;
+  seniority?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  url?: string | null;
+  ghost_score?: number | null;
+  posted_at?: string | null;
   metadata?: Record<string, unknown> | null;
+};
+
+type EmbeddedRole = {
+  id: string;
+  title: string;
+  location?: string | null;
+  remote?: boolean | null;
+  employment_type?: string | null;
+  seniority?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  url?: string | null;
+  ghost_score?: number | null;
+  posted_at?: string | null;
+  role_family?: string | null;
 };
 
 function normaliseRoleFamily(raw: unknown): string | null {
@@ -96,7 +121,7 @@ export async function GET(req: NextRequest) {
       .from("roles")
       .select("company_id,title,metadata")
       .eq("is_active", true)
-      .lt("ghost_score", 40)
+      .lt("ghost_score", 70)
       .limit(10000);
 
     if (rolesErr) {
@@ -192,28 +217,52 @@ export async function GET(req: NextRequest) {
 
   const counts = new Map<string, number>();
   const familyCounts = new Map<string, Record<string, number>>();
+  const rolesMap = new Map<string, EmbeddedRole[]>();
   if (ids.length > 0) {
     const { data: roleRows, error: rolesErr } = await supabase
       .from("roles")
-      .select("company_id,title,metadata")
+      .select(
+        "id,company_id,title,location,remote,employment_type,seniority,salary_min,salary_max,url,ghost_score,posted_at,metadata"
+      )
       .in("company_id", ids)
       .eq("is_active", true)
-      .lt("ghost_score", 40);
+      .lt("ghost_score", 70)
+      .order("posted_at", { ascending: false, nullsFirst: false });
 
     if (rolesErr) {
       return NextResponse.json({ error: rolesErr.message }, { status: 500 });
     }
 
     for (const r of (roleRows ?? []) as RoleRow[]) {
-      if (!r.company_id) continue;
+      if (!r.company_id || !r.id) continue;
       counts.set(r.company_id, (counts.get(r.company_id) ?? 0) + 1);
 
       const roleFamily = getRoleFamily(r);
-      if (!roleFamily) continue;
 
-      const current = familyCounts.get(r.company_id) ?? {};
-      current[roleFamily] = (current[roleFamily] ?? 0) + 1;
-      familyCounts.set(r.company_id, current);
+      if (roleFamily) {
+        const current = familyCounts.get(r.company_id) ?? {};
+        current[roleFamily] = (current[roleFamily] ?? 0) + 1;
+        familyCounts.set(r.company_id, current);
+      }
+
+      const embedded: EmbeddedRole = {
+        id: r.id,
+        title: r.title ?? "",
+        location: r.location,
+        remote: r.remote,
+        employment_type: r.employment_type,
+        seniority: r.seniority,
+        salary_min: r.salary_min,
+        salary_max: r.salary_max,
+        url: r.url,
+        ghost_score: r.ghost_score,
+        posted_at: r.posted_at,
+        role_family: roleFamily,
+      };
+
+      const list = rolesMap.get(r.company_id) ?? [];
+      list.push(embedded);
+      rolesMap.set(r.company_id, list);
     }
   }
 
@@ -221,6 +270,7 @@ export async function GET(req: NextRequest) {
     ...r,
     open_roles_count: counts.get(String(r.id)) ?? 0,
     role_families: familyCounts.get(String(r.id)) ?? {},
+    roles: rolesMap.get(String(r.id)) ?? [],
   }));
 
   return NextResponse.json({

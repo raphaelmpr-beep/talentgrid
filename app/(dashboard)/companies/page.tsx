@@ -9,7 +9,22 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup } from "@/components/ui/toggle-group";
-import { formatCompactNumber } from "@/lib/utils";
+import { formatCompactNumber, formatRelative } from "@/lib/utils";
+
+type EmbeddedRole = {
+  id: string;
+  title: string;
+  location?: string | null;
+  remote?: boolean | null;
+  employment_type?: string | null;
+  seniority?: string | null;
+  salary_min?: number | null;
+  salary_max?: number | null;
+  url?: string | null;
+  ghost_score?: number | null;
+  posted_at?: string | null;
+  role_family?: string | null;
+};
 
 type Company = {
   id: string;
@@ -24,6 +39,7 @@ type Company = {
   metadata?: Record<string, unknown> | null;
   open_roles_count?: number;
   role_families?: Record<string, number>;
+  roles?: EmbeddedRole[];
   created_at: string;
 };
 
@@ -43,6 +59,7 @@ type SortKey = "hiring_desc" | "hiring_asc" | "name_asc" | "newest";
 const DEFAULT_MIN_REVENUE = 0;
 const DEFAULT_MAX_REVENUE = 10_000_000_000;
 const DEFAULT_PAGE_SIZE = 20;
+const ROLES_PREVIEW_LIMIT = 10;
 
 function hiringVolume(c: Company): number {
   if (typeof c.open_roles_count === "number") return c.open_roles_count;
@@ -51,13 +68,128 @@ function hiringVolume(c: Company): number {
   return typeof direct === "number" ? direct : 0;
 }
 
-function rolesByFamily(c: Company): Record<string, number> {
-  if (c.role_families && typeof c.role_families === "object") {
-    return c.role_families;
+function ghostBadge(score: number | null | undefined): React.ReactNode {
+  const s = score ?? 0;
+  if (s < 20) return <Badge variant="success">Fresh</Badge>;
+  if (s < 40) return <Badge variant="secondary">Active</Badge>;
+  if (s < 70) return <Badge variant="warning">Stale</Badge>;
+  return <Badge variant="danger">Ghost</Badge>;
+}
+
+function salaryLabel(role: EmbeddedRole): string | null {
+  if (!role.salary_min && !role.salary_max) return null;
+  const fmt = (n: number) =>
+    new Intl.NumberFormat("en", {
+      notation: "compact",
+      maximumFractionDigits: 1,
+    }).format(n);
+  if (role.salary_min && role.salary_max)
+    return `$${fmt(role.salary_min)}–${fmt(role.salary_max)}`;
+  if (role.salary_min) return `$${fmt(role.salary_min)}+`;
+  return `up to $${fmt(role.salary_max!)}`;
+}
+
+function InlineRoleList({
+  roles,
+  companyId,
+  totalRoles,
+}: {
+  roles: EmbeddedRole[];
+  companyId: string;
+  totalRoles: number;
+}) {
+  const preview = roles.slice(0, ROLES_PREVIEW_LIMIT);
+  const hasMore = totalRoles > ROLES_PREVIEW_LIMIT;
+
+  if (roles.length === 0) {
+    return (
+      <p className="py-3 text-xs text-neutral-400 italic">
+        No matching roles for this filter.
+      </p>
+    );
   }
-  const m = (c.metadata ?? {}) as Record<string, unknown>;
-  const raw = m["role_families"];
-  return (raw && typeof raw === "object" ? (raw as Record<string, number>) : {}) ?? {};
+
+  return (
+    <div>
+      <table className="w-full text-sm">
+        <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-400">
+          <tr>
+            <th className="px-3 py-1.5 text-left font-medium">Role</th>
+            <th className="hidden px-3 py-1.5 text-left font-medium sm:table-cell">
+              Location
+            </th>
+            <th className="hidden px-3 py-1.5 text-left font-medium md:table-cell">
+              Compensation
+            </th>
+            <th className="px-3 py-1.5 text-left font-medium">Status</th>
+            <th className="hidden px-3 py-1.5 text-left font-medium sm:table-cell">
+              Posted
+            </th>
+            <th className="px-3 py-1.5" />
+          </tr>
+        </thead>
+        <tbody>
+          {preview.map((role) => (
+            <tr
+              key={role.id}
+              className="border-t border-neutral-100 hover:bg-neutral-50"
+            >
+              <td className="px-3 py-2 align-top">
+                <div className="font-medium text-neutral-900">{role.title}</div>
+                <div className="mt-0.5 flex flex-wrap gap-1 text-xs text-neutral-500">
+                  {role.seniority && <span>{role.seniority}</span>}
+                  {role.employment_type && (
+                    <>
+                      <span>·</span>
+                      <span>{role.employment_type}</span>
+                    </>
+                  )}
+                </div>
+              </td>
+              <td className="hidden px-3 py-2 align-top text-neutral-700 sm:table-cell">
+                {role.location ?? (role.remote ? "Remote" : "—")}
+                {role.remote && role.location && (
+                  <span className="ml-1 text-xs text-neutral-400">(remote ok)</span>
+                )}
+              </td>
+              <td className="hidden px-3 py-2 align-top text-neutral-700 md:table-cell">
+                {salaryLabel(role) ?? "—"}
+              </td>
+              <td className="px-3 py-2 align-top">{ghostBadge(role.ghost_score)}</td>
+              <td className="hidden px-3 py-2 align-top text-neutral-500 sm:table-cell">
+                {formatRelative(role.posted_at) || "—"}
+              </td>
+              <td className="px-3 py-2 align-top">
+                {role.url ? (
+                  <a
+                    href={role.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-blue-600 hover:underline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    Apply ↗
+                  </a>
+                ) : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {hasMore && (
+        <div className="border-t border-neutral-100 px-3 py-2">
+          <Link
+            href={`/companies/${companyId}`}
+            className="text-xs text-blue-600 hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            View all {totalRoles} roles →
+          </Link>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function CompaniesPage() {
@@ -302,9 +434,9 @@ export default function CompaniesPage() {
       )}
 
       {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-32 w-full" />
+        <div className="space-y-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-48 w-full" />
           ))}
         </div>
       ) : filteredSorted.length === 0 ? (
@@ -313,62 +445,73 @@ export default function CompaniesPage() {
         </div>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="space-y-4">
             {filteredSorted.map((c) => {
               const volume = hiringVolume(c);
-              const families = rolesByFamily(c);
-              const topFamilies = Object.entries(families)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 3);
+              const allRoles = c.roles ?? [];
+              const visibleRoles =
+                family === "all"
+                  ? allRoles
+                  : allRoles.filter((r) => r.role_family === family);
 
               return (
-                <Link key={c.id} href={`/companies/${c.id}`} className="group block">
-                  <Card className="h-full transition-shadow group-hover:shadow-md">
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-md bg-neutral-100 text-sm font-semibold text-neutral-600">
-                          {c.logo_url ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img src={c.logo_url} alt="" className="h-full w-full object-cover" />
-                          ) : (
-                            c.name.slice(0, 1).toUpperCase()
-                          )}
+                <Card key={c.id} className="overflow-hidden">
+                  <CardContent className="p-0">
+                    {/* Company header */}
+                    <div className="flex flex-wrap items-start gap-4 p-4">
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-md bg-neutral-100 text-base font-semibold text-neutral-600">
+                        {c.logo_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={c.logo_url}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : (
+                          c.name.slice(0, 1).toUpperCase()
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link
+                            href={`/companies/${c.id}`}
+                            className="text-base font-semibold hover:underline"
+                          >
+                            {c.name}
+                          </Link>
+                          {c.is_hiring && <Badge variant="success">Hiring</Badge>}
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <h2 className="truncate text-base font-semibold">{c.name}</h2>
-                            {c.is_hiring && <Badge variant="success">Hiring</Badge>}
-                          </div>
-                          <p className="truncate text-xs text-neutral-500">
-                            {c.industry ?? c.domain ?? c.location ?? ""}
+                        <p className="text-xs text-neutral-500">
+                          {[c.industry, c.size, c.location]
+                            .filter(Boolean)
+                            .join(" · ") || c.domain || ""}
+                        </p>
+                        {c.description && (
+                          <p className="mt-1 line-clamp-2 text-sm text-neutral-600">
+                            {c.description}
                           </p>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="text-xl font-semibold tabular-nums">
+                          {formatCompactNumber(volume)}
+                        </div>
+                        <div className="text-[10px] uppercase tracking-wide text-neutral-500">
+                          open roles
                         </div>
                       </div>
+                    </div>
 
-                      {c.description && (
-                        <p className="mt-3 line-clamp-2 text-sm text-neutral-600">{c.description}</p>
-                      )}
-
-                      <div className="mt-4 flex items-center justify-between">
-                        <div className="flex flex-wrap gap-1">
-                          {topFamilies.map(([fam, n]) => (
-                            <Badge key={fam} variant="outline">
-                              {fam} · {n}
-                            </Badge>
-                          ))}
-                        </div>
-                        <div className="text-right">
-                          <div className="text-lg font-semibold tabular-nums">
-                            {formatCompactNumber(volume)}
-                          </div>
-                          <div className="text-[10px] uppercase tracking-wide text-neutral-500">
-                            open roles
-                          </div>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
+                    {/* Inline job listings */}
+                    <div className="border-t border-neutral-100">
+                      <InlineRoleList
+                        roles={visibleRoles}
+                        companyId={c.id}
+                        totalRoles={volume}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
