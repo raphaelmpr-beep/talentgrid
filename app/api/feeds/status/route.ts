@@ -3,6 +3,7 @@ import {
   theirStackConfig,
   enrichmentConfig,
   redisConfig,
+  supabaseConfig,
 } from "@/lib/feeds/config";
 
 export const runtime = "nodejs";
@@ -14,7 +15,12 @@ export async function GET() {
   const theirstack = theirStackConfig();
   const enrichment = enrichmentConfig();
   const redis = redisConfig();
+  const supabase = supabaseConfig();
   return NextResponse.json({
+    supabase: {
+      configured: supabase.configured,
+      missing: supabase.missing,
+    },
     providers: {
       theirstack: {
         configured: theirstack.configured,
