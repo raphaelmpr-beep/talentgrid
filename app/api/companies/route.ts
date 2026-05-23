@@ -63,7 +63,7 @@ async function fetchAllActiveRoles(
     const { data, error } = await query;
     if (error) return { data: null, error };
 
-    const chunk = (data ?? []) as RoleRow[];
+    const chunk = ((data ?? []) as unknown[]) as RoleRow[];
     rows.push(...chunk);
 
     if (chunk.length < ROLE_BATCH_SIZE) break;
