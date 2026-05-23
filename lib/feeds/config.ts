@@ -119,6 +119,27 @@ export function checkFeedAdmin(
   return { ok: true, reason: "secret_match" };
 }
 
+export type SupabaseConfig = {
+  configured: boolean;
+  missing: string[];
+  meta?: Record<string, string>;
+};
+
+export function supabaseConfig(): SupabaseConfig {
+  const url = readEnv("NEXT_PUBLIC_SUPABASE_URL");
+  const anonKey = readEnv("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+
+  const missing: string[] = [];
+  if (!url) missing.push("NEXT_PUBLIC_SUPABASE_URL");
+  if (!anonKey) missing.push("NEXT_PUBLIC_SUPABASE_ANON_KEY");
+
+  return {
+    configured: missing.length === 0,
+    missing,
+    ...(url ? { meta: { url } } : {}),
+  };
+}
+
 export function notConfiguredPayload(provider: ProviderConfig) {
   return {
     error: "provider_not_configured",

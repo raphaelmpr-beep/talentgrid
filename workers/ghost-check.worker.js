@@ -35,7 +35,7 @@ async function checkRole(roleId) {
     }
   }
 
-  const isActive = score < 40;
+  const isActive = score < 70;
 
   const { error: updateError } = await supabase
     .from("roles")
