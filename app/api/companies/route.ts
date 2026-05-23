@@ -4,6 +4,66 @@ import { companyQuerySchema } from "@/lib/validators/company";
 
 export const runtime = "nodejs";
 
+type RoleRow = {
+  company_id: string | null;
+  title?: string | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+function normaliseRoleFamily(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const value = raw.trim().toLowerCase();
+  if (!value) return null;
+
+  if (value.includes("engineer") || value.includes("developer")) return "engineering";
+  if (value.includes("product")) return "product";
+  if (value.includes("design")) return "design";
+  if (value.includes("sales") || value.includes("account executive") || value === "ae") {
+    return "sales";
+  }
+  if (
+    value.includes("operations") ||
+    value.includes("ops") ||
+    value.includes("finance") ||
+    value.includes("hr") ||
+    value.includes("people") ||
+    value.includes("talent")
+  ) {
+    return "ops";
+  }
+
+  return null;
+}
+
+function inferRoleFamilyFromTitle(title: string | null | undefined): string | null {
+  if (!title) return null;
+  const t = title.toLowerCase();
+  if (/engineer|developer|software|frontend|backend|full\s*stack|devops|sre|data\s*engineer/.test(t)) {
+    return "engineering";
+  }
+  if (/product\s*(manager|owner)|\bpm\b/.test(t)) return "product";
+  if (/designer|ux|ui|product\s*design/.test(t)) return "design";
+  if (/sales|account\s*executive|account\s*manager|business\s*development/.test(t)) {
+    return "sales";
+  }
+  if (/operations|ops|finance|accounting|hr|people\s*ops|talent\s*acquisition|recruit/.test(t)) {
+    return "ops";
+  }
+  return null;
+}
+
+function getRoleFamily(role: RoleRow): string | null {
+  const metadata = role.metadata ?? {};
+  const direct =
+    normaliseRoleFamily(metadata["role_family"]) ??
+    normaliseRoleFamily(metadata["roleFamily"]) ??
+    normaliseRoleFamily(metadata["job_category"]) ??
+    normaliseRoleFamily(metadata["jobCategory"]);
+
+  if (direct) return direct;
+  return inferRoleFamilyFromTitle(role.title);
+}
+
 export async function GET(req: NextRequest) {
   const parsed = companyQuerySchema.safeParse(
     Object.fromEntries(req.nextUrl.searchParams)
@@ -15,6 +75,7 @@ export async function GET(req: NextRequest) {
   const {
     page,
     pageSize,
+    family,
     isHiring,
     q,
     minRevenue,
@@ -28,34 +89,61 @@ export async function GET(req: NextRequest) {
   // Use live role activity as the source of truth for "hiring" state.
   const enforceOpenRoles = isHiring !== false;
   let hiringCompanyIds: string[] | null = null;
-  if (enforceOpenRoles) {
-    const { data: hiringRows, error: hiringErr } = await supabase
+  let familyCompanyIds: string[] | null = null;
+  let activeRoles: RoleRow[] = [];
+  if (enforceOpenRoles || family) {
+    const { data: activeRoleRows, error: rolesErr } = await supabase
       .from("roles")
-      .select("company_id")
+      .select("company_id,title,metadata")
       .eq("is_active", true)
       .lt("ghost_score", 40)
       .limit(10000);
 
-    if (hiringErr) {
-      return NextResponse.json({ error: hiringErr.message }, { status: 500 });
+    if (rolesErr) {
+      return NextResponse.json({ error: rolesErr.message }, { status: 500 });
     }
 
-    hiringCompanyIds = Array.from(
-      new Set(
-        ((hiringRows ?? []) as Array<{ company_id: string | null }>)
-          .map((r) => r.company_id)
-          .filter((id): id is string => typeof id === "string" && id.length > 0)
-      )
-    );
+    activeRoles = (activeRoleRows ?? []) as RoleRow[];
 
-    if (hiringCompanyIds.length === 0) {
-      return NextResponse.json({
-        data: [],
-        page,
-        pageSize,
-        total: 0,
-        filters: { minRevenue, maxRevenue, includeUnknownRevenue },
-      });
+    if (enforceOpenRoles) {
+      hiringCompanyIds = Array.from(
+        new Set(
+          activeRoles
+            .map((r) => r.company_id)
+            .filter((id): id is string => typeof id === "string" && id.length > 0)
+        )
+      );
+
+      if (hiringCompanyIds.length === 0) {
+        return NextResponse.json({
+          data: [],
+          page,
+          pageSize,
+          total: 0,
+          filters: { family, minRevenue, maxRevenue, includeUnknownRevenue },
+        });
+      }
+    }
+
+    if (family) {
+      familyCompanyIds = Array.from(
+        new Set(
+          activeRoles
+            .filter((r) => getRoleFamily(r) === family)
+            .map((r) => r.company_id)
+            .filter((id): id is string => typeof id === "string" && id.length > 0)
+        )
+      );
+
+      if (familyCompanyIds.length === 0) {
+        return NextResponse.json({
+          data: [],
+          page,
+          pageSize,
+          total: 0,
+          filters: { family, minRevenue, maxRevenue, includeUnknownRevenue },
+        });
+      }
     }
   }
 
@@ -68,6 +156,10 @@ export async function GET(req: NextRequest) {
     query = query.in("id", hiringCompanyIds);
   } else if (isHiring === false) {
     query = query.eq("is_hiring", false);
+  }
+
+  if (family && familyCompanyIds) {
+    query = query.in("id", familyCompanyIds);
   }
 
   if (q) query = query.ilike("name", `%${q}%`);
@@ -99,10 +191,11 @@ export async function GET(req: NextRequest) {
     .filter((id): id is string => !!id);
 
   const counts = new Map<string, number>();
+  const familyCounts = new Map<string, Record<string, number>>();
   if (ids.length > 0) {
     const { data: roleRows, error: rolesErr } = await supabase
       .from("roles")
-      .select("company_id")
+      .select("company_id,title,metadata")
       .in("company_id", ids)
       .eq("is_active", true)
       .lt("ghost_score", 40);
@@ -111,14 +204,23 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: rolesErr.message }, { status: 500 });
     }
 
-    for (const r of (roleRows ?? []) as Array<{ company_id: string }>) {
+    for (const r of (roleRows ?? []) as RoleRow[]) {
+      if (!r.company_id) continue;
       counts.set(r.company_id, (counts.get(r.company_id) ?? 0) + 1);
+
+      const roleFamily = getRoleFamily(r);
+      if (!roleFamily) continue;
+
+      const current = familyCounts.get(r.company_id) ?? {};
+      current[roleFamily] = (current[roleFamily] ?? 0) + 1;
+      familyCounts.set(r.company_id, current);
     }
   }
 
   const annotated = rows.map((r) => ({
     ...r,
     open_roles_count: counts.get(String(r.id)) ?? 0,
+    role_families: familyCounts.get(String(r.id)) ?? {},
   }));
 
   return NextResponse.json({
@@ -126,6 +228,6 @@ export async function GET(req: NextRequest) {
     page,
     pageSize,
     total: count ?? 0,
-    filters: { minRevenue, maxRevenue, includeUnknownRevenue },
+    filters: { family, minRevenue, maxRevenue, includeUnknownRevenue },
   });
 }

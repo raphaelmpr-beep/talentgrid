@@ -23,6 +23,7 @@ type Company = {
   is_hiring: boolean;
   metadata?: Record<string, unknown> | null;
   open_roles_count?: number;
+  role_families?: Record<string, number>;
   created_at: string;
 };
 
@@ -51,6 +52,9 @@ function hiringVolume(c: Company): number {
 }
 
 function rolesByFamily(c: Company): Record<string, number> {
+  if (c.role_families && typeof c.role_families === "object") {
+    return c.role_families;
+  }
   const m = (c.metadata ?? {}) as Record<string, unknown>;
   const raw = m["role_families"];
   return (raw && typeof raw === "object" ? (raw as Record<string, number>) : {}) ?? {};
@@ -65,6 +69,7 @@ export default function CompaniesPage() {
   const [debouncedQ, setDebouncedQ] = React.useState("");
   const [hiringOnly, setHiringOnly] = React.useState(true);
   const [family, setFamily] = React.useState("all");
+  const [pageSize, setPageSize] = React.useState<number>(DEFAULT_PAGE_SIZE);
   const [sort, setSort] = React.useState<SortKey>("hiring_desc");
   const [minRevenue, setMinRevenue] = React.useState<number>(DEFAULT_MIN_REVENUE);
   const [maxRevenue, setMaxRevenue] = React.useState<number>(DEFAULT_MAX_REVENUE);
@@ -90,7 +95,7 @@ export default function CompaniesPage() {
     setTotal(0);
     setHasMore(false);
     setPage(1);
-  }, [debouncedQ, hiringOnly, minRevenue, maxRevenue, includeUnknownRevenue]);
+  }, [debouncedQ, hiringOnly, family, pageSize, minRevenue, maxRevenue, includeUnknownRevenue]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -104,9 +109,10 @@ export default function CompaniesPage() {
 
     const params = new URLSearchParams();
     params.set("page", String(page));
-    params.set("pageSize", String(DEFAULT_PAGE_SIZE));
+    params.set("pageSize", String(pageSize));
     if (debouncedQ) params.set("q", debouncedQ);
     if (!hiringOnly) params.set("isHiring", "false");
+    if (family !== "all") params.set("family", family);
     params.set("minRevenue", String(minRevenue));
     params.set("maxRevenue", String(maxRevenue));
     if (includeUnknownRevenue) params.set("includeUnknownRevenue", "true");
@@ -121,7 +127,7 @@ export default function CompaniesPage() {
 
         const nextItems = nextPage.data ?? [];
         setTotal(nextPage.total ?? 0);
-        setHasMore(page * DEFAULT_PAGE_SIZE < (nextPage.total ?? 0));
+        setHasMore(page * pageSize < (nextPage.total ?? 0));
 
         setItems((prev) => {
           if (page === 1) return nextItems;
@@ -143,7 +149,7 @@ export default function CompaniesPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, debouncedQ, hiringOnly, minRevenue, maxRevenue, includeUnknownRevenue]);
+  }, [page, pageSize, debouncedQ, hiringOnly, family, minRevenue, maxRevenue, includeUnknownRevenue]);
 
   React.useEffect(() => {
     if (!hasMore || loading || loadingMore || error) return;
@@ -165,15 +171,7 @@ export default function CompaniesPage() {
   }, [hasMore, loading, loadingMore, error, items.length]);
 
   const filteredSorted = React.useMemo(() => {
-    let rows = items;
-    if (family !== "all") {
-      rows = rows.filter((c) => {
-        const fam = rolesByFamily(c);
-        return (fam[family] ?? 0) > 0;
-      });
-    }
-
-    const sorted = [...rows];
+    const sorted = [...items];
     sorted.sort((a, b) => {
       switch (sort) {
         case "hiring_desc":
@@ -188,7 +186,7 @@ export default function CompaniesPage() {
     });
 
     return sorted;
-  }, [items, family, sort]);
+  }, [items, sort]);
 
   return (
     <div className="space-y-6">
@@ -269,6 +267,21 @@ export default function CompaniesPage() {
           </div>
 
           <div className="ml-auto flex items-center gap-2">
+            <label
+              htmlFor="pageSize"
+              className="text-xs uppercase tracking-wide text-neutral-500"
+            >
+              Page size
+            </label>
+            <Select
+              id="pageSize"
+              value={String(pageSize)}
+              onChange={(e) => setPageSize(Number(e.target.value) || DEFAULT_PAGE_SIZE)}
+            >
+              <option value="20">20</option>
+              <option value="50">50</option>
+            </Select>
+
             <label htmlFor="sort" className="text-xs uppercase tracking-wide text-neutral-500">
               Sort
             </label>

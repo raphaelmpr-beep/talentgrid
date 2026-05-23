@@ -21,11 +21,19 @@ export const companyUpdateSchema = companyCreateSchema.partial();
 // are considered overlapping with the requested window.
 export const DEFAULT_MIN_REVENUE = 0;
 export const DEFAULT_MAX_REVENUE = 10_000_000_000;
+export const COMPANY_ROLE_FAMILIES = [
+  "engineering",
+  "product",
+  "design",
+  "sales",
+  "ops",
+] as const;
 
 export const companyQuerySchema = z
   .object({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    family: z.enum(COMPANY_ROLE_FAMILIES).optional(),
     isHiring: z
       .union([z.literal("true"), z.literal("false")])
       .optional()
