@@ -6,11 +6,20 @@ const nav = [
   { href: "/favorites", label: "Favorites" },
 ];
 
+function isSupabaseConfigured() {
+  return (
+    !!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
+    !!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()
+  );
+}
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const supabaseReady = isSupabaseConfigured();
+
   return (
     <div className="min-h-screen bg-neutral-50 text-neutral-900">
       <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white/80 backdrop-blur">
@@ -31,6 +40,21 @@ export default function DashboardLayout({
           </nav>
         </div>
       </header>
+
+      {!supabaseReady && (
+        <div className="border-b border-yellow-200 bg-yellow-50 px-4 py-2 text-center text-sm text-yellow-800 sm:px-6">
+          ⚠️ Supabase is not configured. Set{" "}
+          <code className="rounded bg-yellow-100 px-1 font-mono text-xs">
+            NEXT_PUBLIC_SUPABASE_URL
+          </code>{" "}
+          and{" "}
+          <code className="rounded bg-yellow-100 px-1 font-mono text-xs">
+            NEXT_PUBLIC_SUPABASE_ANON_KEY
+          </code>{" "}
+          to enable data.
+        </div>
+      )}
+
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6">{children}</main>
     </div>
   );

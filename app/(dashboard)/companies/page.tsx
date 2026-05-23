@@ -260,7 +260,14 @@ export default function CompaniesPage() {
 
     fetch(`/api/companies?${params.toString()}`)
       .then(async (r) => {
-        if (!r.ok) throw new Error(`Failed: ${r.status}`);
+        if (!r.ok) {
+          const body = await r.json().catch(() => null);
+          const msg =
+            body && typeof body.error === "string"
+              ? body.error
+              : `Failed: ${r.status}`;
+          throw new Error(msg);
+        }
         return (await r.json()) as Page<Company>;
       })
       .then((nextPage) => {
