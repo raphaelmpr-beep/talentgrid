@@ -36,7 +36,7 @@ export const companyQuerySchema = z
     includeUnknownRevenue: z
       .union([z.literal("true"), z.literal("false")])
       .optional()
-      .default("false")
+      .default("true")
       .transform((v) => v === "true"),
   })
   .refine((v) => v.minRevenue <= v.maxRevenue, {
