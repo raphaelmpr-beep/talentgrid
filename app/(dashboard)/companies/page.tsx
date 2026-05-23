@@ -62,6 +62,7 @@ type SortKey = "hiring_desc" | "hiring_asc" | "name_asc" | "newest";
 const DEFAULT_MIN_REVENUE = 0;
 const DEFAULT_MAX_REVENUE = 10_000_000_000;
 const DEFAULT_PAGE_SIZE = 100;
+const DEFAULT_MIN_OPEN_ROLES = 2;
 const ROLES_PREVIEW_LIMIT = 10;
 
 function hiringVolume(c: Company, family: string): number {
@@ -221,6 +222,7 @@ export default function CompaniesPage() {
   const [maxRevenueInput, setMaxRevenueInput] = React.useState<string>(
     String(DEFAULT_MAX_REVENUE)
   );
+  const [minOpenRoles, setMinOpenRoles] = React.useState<number>(DEFAULT_MIN_OPEN_ROLES);
   const [page, setPage] = React.useState(1);
   const [total, setTotal] = React.useState(0);
   const [hasMore, setHasMore] = React.useState(false);
@@ -236,7 +238,7 @@ export default function CompaniesPage() {
     setTotal(0);
     setHasMore(false);
     setPage(1);
-  }, [debouncedQ, hiringOnly, family, pageSize, minRevenue, maxRevenue, includeUnknownRevenue]);
+  }, [debouncedQ, hiringOnly, family, pageSize, minRevenue, maxRevenue, includeUnknownRevenue, minOpenRoles]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -257,6 +259,7 @@ export default function CompaniesPage() {
     params.set("minRevenue", String(minRevenue));
     params.set("maxRevenue", String(maxRevenue));
     if (includeUnknownRevenue) params.set("includeUnknownRevenue", "true");
+    params.set("minOpenRoles", String(minOpenRoles));
 
     fetch(`/api/companies?${params.toString()}`)
       .then(async (r) => {
@@ -290,7 +293,7 @@ export default function CompaniesPage() {
     return () => {
       cancelled = true;
     };
-  }, [page, pageSize, debouncedQ, hiringOnly, family, minRevenue, maxRevenue, includeUnknownRevenue]);
+  }, [page, pageSize, debouncedQ, hiringOnly, family, minRevenue, maxRevenue, includeUnknownRevenue, minOpenRoles]);
 
   React.useEffect(() => {
     if (!hasMore || loading || loadingMore || error) return;
@@ -359,6 +362,23 @@ export default function CompaniesPage() {
             />
             Hiring only
           </label>
+
+          <div className="flex items-center gap-2">
+            <label htmlFor="minOpenRoles" className="text-xs uppercase tracking-wide text-neutral-500">
+              Min open roles
+            </label>
+            <Select
+              id="minOpenRoles"
+              value={String(minOpenRoles)}
+              onChange={(e) => setMinOpenRoles(Number(e.target.value) || DEFAULT_MIN_OPEN_ROLES)}
+            >
+              <option value="1">1+</option>
+              <option value="2">2+</option>
+              <option value="3">3+</option>
+              <option value="5">5+</option>
+              <option value="10">10+</option>
+            </Select>
+          </div>
 
           <ToggleGroup value={family} onChange={setFamily} options={ROLE_FAMILIES} />
 

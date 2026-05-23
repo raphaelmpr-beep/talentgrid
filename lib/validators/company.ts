@@ -49,6 +49,7 @@ export const companyQuerySchema = z
       .optional()
       .default("true")
       .transform((v) => v === "true"),
+    minOpenRoles: z.coerce.number().int().min(1).default(2),
   })
   .refine((v) => v.minRevenue <= v.maxRevenue, {
     message: "minRevenue must be less than or equal to maxRevenue",

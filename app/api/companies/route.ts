@@ -37,7 +37,11 @@ type EmbeddedRole = {
 
 type SupabaseClient = NonNullable<Awaited<ReturnType<typeof createClient>>>;
 
-const ROLE_BATCH_SIZE = 1000;
+// Safe batch size — kept at 200 so it fits within any reasonable PostgREST
+// max_rows setting.  We advance by the *actual* number of rows received rather
+// than by ROLE_BATCH_SIZE so that a server-side cap never causes the loop to
+// skip pages.
+const ROLE_BATCH_SIZE = 200;
 
 async function fetchAllActiveRoles(
   supabase: SupabaseClient,
@@ -46,10 +50,24 @@ async function fetchAllActiveRoles(
 ) {
   if (companyIds && companyIds.length === 0) return { data: [] as RoleRow[], error: null };
 
+  // ── 1. Get exact total so we know when to stop ──────────────────────────
+  let countQuery = supabase
+    .from("roles")
+    .select("*", { count: "exact", head: true })
+    .eq("is_active", true)
+    .lt("ghost_score", 70);
+
+  if (companyIds) countQuery = countQuery.in("company_id", companyIds);
+
+  const { count: total, error: countError } = await countQuery;
+  if (countError) return { data: null, error: countError };
+  if (!total) return { data: [] as RoleRow[], error: null };
+
+  // ── 2. Page through results, advancing by rows *actually* received ───────
   const rows: RoleRow[] = [];
   let from = 0;
 
-  while (true) {
+  while (from < total) {
     let query = supabase
       .from("roles")
       .select(columns)
@@ -64,10 +82,9 @@ async function fetchAllActiveRoles(
     if (error) return { data: null, error };
 
     const chunk = ((data ?? []) as unknown[]) as RoleRow[];
+    if (chunk.length === 0) break; // safety: no forward progress
     rows.push(...chunk);
-
-    if (chunk.length < ROLE_BATCH_SIZE) break;
-    from += ROLE_BATCH_SIZE;
+    from += chunk.length; // advance by rows actually returned
   }
 
   return { data: rows, error: null };
@@ -153,6 +170,7 @@ export async function GET(req: NextRequest) {
     minRevenue,
     maxRevenue,
     includeUnknownRevenue,
+    minOpenRoles,
   } = parsed.data;
 
   const supabase = await createClient();
@@ -176,13 +194,20 @@ export async function GET(req: NextRequest) {
     activeRoles = (activeRoleRows ?? []) as RoleRow[];
 
     if (enforceOpenRoles) {
-      hiringCompanyIds = Array.from(
-        new Set(
-          activeRoles
-            .map((r) => r.company_id)
-            .filter((id): id is string => typeof id === "string" && id.length > 0)
-        )
-      );
+      // Count active open roles per company so we can enforce minOpenRoles.
+      const roleCountPerCompany = new Map<string, number>();
+      for (const r of activeRoles) {
+        if (typeof r.company_id === "string" && r.company_id.length > 0) {
+          roleCountPerCompany.set(
+            r.company_id,
+            (roleCountPerCompany.get(r.company_id) ?? 0) + 1
+          );
+        }
+      }
+
+      hiringCompanyIds = Array.from(roleCountPerCompany.entries())
+        .filter(([, count]) => count >= minOpenRoles)
+        .map(([id]) => id);
 
       if (hiringCompanyIds.length === 0) {
         return NextResponse.json({
@@ -190,7 +215,7 @@ export async function GET(req: NextRequest) {
           page,
           pageSize,
           total: 0,
-          filters: { family, minRevenue, maxRevenue, includeUnknownRevenue },
+          filters: { family, minRevenue, maxRevenue, includeUnknownRevenue, minOpenRoles },
         });
       }
     }
@@ -211,7 +236,7 @@ export async function GET(req: NextRequest) {
           page,
           pageSize,
           total: 0,
-          filters: { family, minRevenue, maxRevenue, includeUnknownRevenue },
+          filters: { family, minRevenue, maxRevenue, includeUnknownRevenue, minOpenRoles },
         });
       }
     }
@@ -325,6 +350,6 @@ export async function GET(req: NextRequest) {
     page,
     pageSize,
     total: count ?? 0,
-    filters: { family, minRevenue, maxRevenue, includeUnknownRevenue },
+    filters: { family, minRevenue, maxRevenue, includeUnknownRevenue, minOpenRoles },
   });
 }
