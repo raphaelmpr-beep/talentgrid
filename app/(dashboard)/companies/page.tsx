@@ -68,7 +68,7 @@ export default function CompaniesPage() {
   const [sort, setSort] = React.useState<SortKey>("hiring_desc");
   const [minRevenue, setMinRevenue] = React.useState<number>(DEFAULT_MIN_REVENUE);
   const [maxRevenue, setMaxRevenue] = React.useState<number>(DEFAULT_MAX_REVENUE);
-  const [includeUnknownRevenue, setIncludeUnknownRevenue] = React.useState(false);
+  const [includeUnknownRevenue, setIncludeUnknownRevenue] = React.useState(true);
   const [minRevenueInput, setMinRevenueInput] = React.useState<string>(
     String(DEFAULT_MIN_REVENUE)
   );
