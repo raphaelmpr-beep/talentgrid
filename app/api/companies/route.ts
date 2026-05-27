@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient, supabaseNotConfiguredResponse } from "@/lib/supabase/server";
 import { companyQuerySchema } from "@/lib/validators/company";
+import { fetchJobSpyJobs } from "@/lib/jobs/jobspy";
 
 export const runtime = "nodejs";
 
@@ -77,6 +78,7 @@ type GroupedJob = {
   createdAt: string;
   revenueCategory: string;
   revenue?: number | null;
+  source: "primary" | "jobspy";
   remote?: boolean | null;
   employment_type?: string | null;
   seniority?: string | null;
@@ -482,6 +484,79 @@ function groupByCompany(
     .sort((a, b) => b.jobCount - a.jobCount);
 }
 
+function normalizeKeyPart(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function mergeJobs(primaryJobs: GroupedJob[], jobSpyJobs: GroupedJob[]): GroupedJob[] {
+  const seen = new Set<string>();
+  const merged: GroupedJob[] = [];
+
+  for (const job of [...primaryJobs, ...jobSpyJobs]) {
+    const baseCompany = normalizeKeyPart(job.company);
+    const title = normalizeKeyPart(job.title);
+    const key = `${baseCompany}::${title}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(job);
+  }
+
+  return merged;
+}
+
+function filterJobs(
+  jobs: GroupedJob[],
+  filters: {
+    domain?: DomainKey;
+    role?: string;
+    query?: string;
+  }
+) {
+  const query = normaliseFreeText(filters.query);
+
+  return jobs.filter((job) => {
+    const domainMatch = !filters.domain || job.domainKeys?.includes(filters.domain);
+    const roleMatch = !filters.role || job.roleKeys?.includes(filters.role);
+    const queryMatch =
+      !query ||
+      asLowerText(job.title).includes(query) ||
+      asLowerText(job.description).includes(query) ||
+      asLowerText(job.company).includes(query);
+
+    return domainMatch && roleMatch && queryMatch;
+  });
+}
+
+function filterByRevenueCategory(jobs: GroupedJob[], category?: RevenueCategoryKey) {
+  if (!category) return jobs;
+  return jobs.filter((job) => getRevenueCategoryKey(job.revenue ?? null) === category);
+}
+
+function validateCompanyCounts(
+  primaryGrouped: ReturnType<typeof groupByCompany>,
+  mergedGrouped: ReturnType<typeof groupByCompany>
+) {
+  return mergedGrouped.map((company) => {
+    const primary = primaryGrouped.find((c) => c.name === company.name);
+    const primaryCount = primary?.jobCount ?? 0;
+    const mergedCount = company.jobCount;
+    const discrepancy = mergedCount - primaryCount;
+
+    return {
+      ...company,
+      primaryCount,
+      mergedCount,
+      discrepancy,
+      jobSpyCount: Math.max(0, discrepancy),
+      confidence: discrepancy > 0 ? ("enhanced" as const) : ("confirmed" as const),
+    };
+  });
+}
+
 function normaliseRoleFamily(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const value = raw.trim().toLowerCase();
@@ -617,8 +692,11 @@ export async function GET(req: NextRequest) {
     : companies ?? [];
 
   const companyById = new Map(revenueFiltered.map((company) => [company.id, company]));
+  const companyByName = new Map(
+    revenueFiltered.map((company) => [normalizeKeyPart(company.name), company])
+  );
 
-  const allJobs: GroupedJob[] = [];
+  const primaryJobs: GroupedJob[] = [];
   for (const company of revenueFiltered) {
     const companyRoles = [...(rolesByCompany.get(company.id) ?? [])].sort((a, b) => {
       const aPosted = a.posted_at ? Date.parse(a.posted_at) : 0;
@@ -631,7 +709,6 @@ export async function GET(req: NextRequest) {
       .filter(Boolean)
       .join(" ");
     const revenue = getCompanyRevenue(company.metadata);
-    const revenueKey = getRevenueCategoryKey(revenue);
     const revenueLabel = getRevenueCategoryLabel(revenue);
 
     for (const roleRow of companyRoles) {
@@ -658,6 +735,7 @@ export async function GET(req: NextRequest) {
         createdAt: roleRow.posted_at ?? roleRow.created_at ?? company.created_at,
         revenueCategory: revenueLabel,
         revenue,
+        source: "primary",
         remote: roleRow.remote,
         employment_type: roleRow.employment_type,
         seniority: roleRow.seniority,
@@ -668,27 +746,65 @@ export async function GET(req: NextRequest) {
         role_family: roleFamily,
         posted_at: roleRow.posted_at,
       };
-
-      const domainMatch =
-        !effectiveDomain ||
-        roleDomains.includes(DOMAIN_LABELS[effectiveDomain]) ||
-        detectDomainKeys(`${asLowerText(company.domain)} ${asLowerText(company.industry)}`).has(
-          effectiveDomain
-        );
-      const roleMatch = !effectiveRole || roleFamily === effectiveRole;
-      const queryMatch =
-        !freeText || companyText.includes(freeText) || roleMatchesFreeText(roleRow, freeText);
-      const revenueMatch =
-        !revenueCategory || (revenueKey !== null && revenueKey === revenueCategory);
-
-      if (domainMatch && roleMatch && queryMatch && revenueMatch) {
-        allJobs.push(job);
-      }
+      primaryJobs.push(job);
     }
   }
 
-  console.log("Filtered jobs count:", allJobs.length);
-  const annotated = groupByCompany(allJobs, companyById).filter(
+  const primaryFiltered = filterByRevenueCategory(
+    filterJobs(primaryJobs, {
+      domain: effectiveDomain,
+      role: effectiveRole,
+      query: freeText,
+    }),
+    revenueCategory
+  );
+
+  let jobSpyJobs: GroupedJob[] = [];
+  const shouldTriggerJobSpy = Boolean(freeText) || primaryFiltered.length < 5;
+  if (shouldTriggerJobSpy) {
+    const secondary = await fetchJobSpyJobs(freeText || q || "");
+    jobSpyJobs = secondary.map((job) => {
+      const company = companyByName.get(normalizeKeyPart(job.company));
+      const revenue = getCompanyRevenue(company?.metadata);
+      const revenueCategoryLabel = getRevenueCategoryLabel(revenue);
+
+      return {
+        id: job.id,
+        title: job.title,
+        company: job.company,
+        companyId: company?.id ?? `jobspy-${normalizeKeyPart(job.company)}`,
+        roles: job.roles,
+        roleKeys: job.roleKeys,
+        domains: job.domains,
+        domainKeys: job.domainKeys,
+        skills: [],
+        description: job.description,
+        location: job.location,
+        createdAt: new Date().toISOString(),
+        revenueCategory: revenueCategoryLabel,
+        revenue,
+        source: "jobspy",
+      };
+    });
+  }
+
+  const mergedJobs = mergeJobs(primaryJobs, jobSpyJobs);
+  const mergedFiltered = filterByRevenueCategory(
+    filterJobs(mergedJobs, {
+      domain: effectiveDomain,
+      role: effectiveRole,
+      query: freeText,
+    }),
+    revenueCategory
+  );
+
+  console.log("Filtered jobs count:", mergedFiltered.length);
+
+  const primaryGrouped = groupByCompany(primaryFiltered, companyById);
+  const mergedGrouped = groupByCompany(mergedFiltered, companyById);
+  const validated = validateCompanyCounts(primaryGrouped, mergedGrouped);
+
+  const annotated = validated.filter(
     (company) => !enforceOpenRoles || company.jobCount > 0
   );
 
@@ -707,6 +823,7 @@ export async function GET(req: NextRequest) {
       includeUnknownRevenue,
       q,
       smartQuery,
+      jobSpyTriggered: shouldTriggerJobSpy,
     },
   });
 }

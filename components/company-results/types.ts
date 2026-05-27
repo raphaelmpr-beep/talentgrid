@@ -65,5 +65,10 @@ export type CompanyResult = {
   companyMeta: CompanyMeta;
   revenueCategory: string;
   revenue?: number | null;
+  primaryCount?: number;
+  mergedCount?: number;
+  discrepancy?: number;
+  jobSpyCount?: number;
+  confidence?: "confirmed" | "enhanced";
   created_at: string;
 };

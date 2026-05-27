@@ -49,6 +49,15 @@ export function CompanyCard({ company }: { company: CompanyResult }) {
           )}
         </div>
 
+        <div className="rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-700">
+          <p>
+            Primary: {company.primaryCount ?? company.jobCount} | JobSpy: +{company.jobSpyCount ?? 0}
+          </p>
+          <p className="font-medium">
+            {company.confidence === "enhanced" ? "Enhanced results" : "Confirmed results"}
+          </p>
+        </div>
+
         <div className="flex items-center justify-between pt-2">
           <p className="text-xs text-neutral-500">Full job data included for drill-down.</p>
           <Link
