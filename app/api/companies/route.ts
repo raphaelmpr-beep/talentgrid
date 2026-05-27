@@ -489,6 +489,13 @@ function groupByCompany(
 }
 
 type AggregatedCompany = ReturnType<typeof groupByCompany>[number];
+type ValidatedCompany = AggregatedCompany & {
+  primaryCount?: number;
+  mergedCount?: number;
+  discrepancy?: number;
+  jobSpyCount?: number;
+  confidence?: "confirmed" | "enhanced";
+};
 
 function isCommonFilterCombination(filters: {
   domain?: DomainKey;
@@ -562,14 +569,14 @@ function buildCompanySummariesFromJobs(jobs: GroupedJob[]) {
 }
 
 async function enforceMinimumJobs(
-  companies: AggregatedCompany[],
+  companies: ValidatedCompany[],
   query: string,
   filters: {
     domain?: DomainKey;
     role?: string;
     revenueCategory?: RevenueCategoryKey;
   }
-): Promise<AggregatedCompany[]> {
+): Promise<ValidatedCompany[]> {
   const normalizedQuery = normaliseFreeText(query);
 
   return Promise.all(
@@ -656,7 +663,7 @@ async function enforceMinimumJobs(
   );
 }
 
-function enforceJobCountIntegrity(companies: AggregatedCompany[]): AggregatedCompany[] {
+function enforceJobCountIntegrity(companies: ValidatedCompany[]): ValidatedCompany[] {
   return companies.map((company) => {
     const expected = company.jobs.length;
     if (company.jobCount !== expected) {
@@ -676,7 +683,7 @@ function logValidationSummary(context: {
   totalMergedJobs: number;
   filteredJobs: number;
   companiesReturned: number;
-  companies: AggregatedCompany[];
+  companies: ValidatedCompany[];
 }) {
   console.log("Validation summary:", {
     totalJobsRetrieved: context.totalPrimaryJobs,
