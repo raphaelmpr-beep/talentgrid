@@ -8,15 +8,15 @@ export function CompanyCard({ company }: { company: CompanyResult }) {
   const topRoles = company.rolesSummary.slice(0, 3);
 
   return (
-    <Card className="overflow-hidden">
-      <CardContent className="space-y-4 p-5">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-semibold text-neutral-900">{company.name}</h3>
+    <Card className="h-full overflow-hidden border-neutral-200">
+      <CardContent className="space-y-4 p-4 sm:p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h3 className="break-words text-lg font-semibold text-neutral-900">{company.name}</h3>
             <p className="text-sm text-neutral-500">{company.location || "Location not listed"}</p>
             <p className="text-sm font-medium text-emerald-700">{company.revenueCategory}</p>
           </div>
-          <div className="text-right">
+          <div className="shrink-0 text-right">
             <div className="text-2xl font-semibold tabular-nums text-neutral-900">
               {formatCompactNumber(company.jobCount)}
             </div>
@@ -36,11 +36,11 @@ export function CompanyCard({ company }: { company: CompanyResult }) {
           )}
         </div>
 
-        <div className="space-y-1">
+        <div className="space-y-1 min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Top roles</p>
           {topRoles.length > 0 ? (
             topRoles.map((item) => (
-              <p key={item.role} className="text-sm text-neutral-700">
+              <p key={item.role} className="break-words text-sm text-neutral-700">
                 {item.role} ({item.count})
               </p>
             ))
@@ -58,11 +58,11 @@ export function CompanyCard({ company }: { company: CompanyResult }) {
           </p>
         </div>
 
-        <div className="flex items-center justify-between pt-2">
+        <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-xs text-neutral-500">Full job data included for drill-down.</p>
           <Link
             href={`/companies/${company.id}`}
-            className="inline-flex h-8 items-center justify-center rounded-md bg-neutral-900 px-3 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
+            className="inline-flex min-h-[40px] items-center justify-center rounded-md bg-neutral-900 px-3 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
           >
             View Jobs
           </Link>
