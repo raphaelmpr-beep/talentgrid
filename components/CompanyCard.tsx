@@ -13,7 +13,7 @@ export function CompanyCard({ company }: { company: CompanyResult }) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h3 className="break-words text-lg font-semibold text-neutral-900">{company.name}</h3>
-            <p className="text-sm text-neutral-500">{company.location || "Location not listed"}</p>
+            <p className="text-sm text-neutral-500">Location: {company.location || "Location not available"}</p>
             <p className="text-sm font-medium text-emerald-700">{company.revenueCategory}</p>
           </div>
           <div className="shrink-0 text-right">

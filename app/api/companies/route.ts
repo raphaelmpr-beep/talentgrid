@@ -172,8 +172,29 @@ const REVENUE_LABELS: Record<RevenueCategoryKey, string> = {
   gt_1b: "1B+",
 };
 
+const REVENUE_KEY_BY_LABEL: Record<string, RevenueCategoryKey> = {
+  "<50m": "lt_50m",
+  "50m-100m": "50m_100m",
+  "100m-600m": "100m_600m",
+  "600m-1b": "600m_1b",
+  "1b+": "gt_1b",
+};
+
 function asLowerText(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function parseNumericValue(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value !== "string") return null;
+  const cleaned = value.replace(/[$,\s]/g, "").trim();
+  if (!cleaned) return null;
+
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function extractStringArray(value: unknown): string[] {
@@ -288,14 +309,14 @@ function hasRevenueOverlap(
   includeUnknownRevenue: boolean
 ): boolean {
   const m = metadata ?? {};
-  const annual = Number(m["annual_revenue"]);
-  const min = Number(m["revenue_min"]);
-  const max = Number(m["revenue_max"]);
+  const annual = parseNumericValue(m["annual_revenue"]);
+  const min = parseNumericValue(m["revenue_min"]);
+  const max = parseNumericValue(m["revenue_max"]);
 
-  if (Number.isFinite(annual)) return annual >= minRevenue && annual <= maxRevenue;
-  if (Number.isFinite(min) || Number.isFinite(max)) {
-    const effectiveMin = Number.isFinite(min) ? min : Number.MIN_SAFE_INTEGER;
-    const effectiveMax = Number.isFinite(max) ? max : Number.MAX_SAFE_INTEGER;
+  if (annual !== null) return annual >= minRevenue && annual <= maxRevenue;
+  if (min !== null || max !== null) {
+    const effectiveMin = min !== null ? min : Number.MIN_SAFE_INTEGER;
+    const effectiveMax = max !== null ? max : Number.MAX_SAFE_INTEGER;
     return effectiveMax >= minRevenue && effectiveMin <= maxRevenue;
   }
 
@@ -353,14 +374,14 @@ function roleMatchesFreeText(role: RoleRow, query: string): boolean {
 
 function getCompanyRevenue(metadata: Record<string, unknown> | null | undefined): number | null {
   const m = metadata ?? {};
-  const annual = Number(m["annual_revenue"]);
-  if (Number.isFinite(annual) && annual > 0) return annual;
+  const annual = parseNumericValue(m["annual_revenue"]);
+  if (annual !== null && annual > 0) return annual;
 
-  const min = Number(m["revenue_min"]);
-  const max = Number(m["revenue_max"]);
-  if (Number.isFinite(min) && Number.isFinite(max)) return (min + max) / 2;
-  if (Number.isFinite(max)) return max;
-  if (Number.isFinite(min)) return min;
+  const min = parseNumericValue(m["revenue_min"]);
+  const max = parseNumericValue(m["revenue_max"]);
+  if (min !== null && max !== null) return (min + max) / 2;
+  if (max !== null) return max;
+  if (min !== null) return min;
 
   return null;
 }
@@ -393,7 +414,7 @@ function groupByCompany(
       map.set(companyKey, {
         id: job.companyId,
         company: job.company,
-        location: company?.location,
+        location: company?.location ?? job.location ?? "Unknown",
         domain: company?.domain,
         industry: company?.industry,
         description: company?.description,
@@ -413,6 +434,9 @@ function groupByCompany(
     }
 
     const entry = map.get(companyKey)!;
+    if (!asLowerText(entry.location) && asLowerText(job.location)) {
+      entry.location = job.location;
+    }
     entry.jobCount += 1;
     entry.jobs.push(job);
     job.domains?.forEach((d) => entry.domains.add(d));
@@ -549,26 +573,32 @@ function jobMatchesFilters(
   const allowPartialRoleMatch = options?.allowPartialRoleMatch ?? false;
   const allowBroadDomainMatch = options?.allowBroadDomainMatch ?? false;
   const allowPartialQueryMatch = options?.allowPartialQueryMatch ?? false;
+  const roleFilter = asLowerText(filters.role);
   const title = asLowerText(job.title);
   const description = asLowerText(job.description);
   const company = asLowerText(job.company);
-  const haystack = [title, description, company, job.roles?.join(" ") ?? ""].join(" ");
+  const roleLabels = (job.roles ?? []).map((role) => asLowerText(role));
+  const haystack = [title, description, company, roleLabels.join(" ")].join(" ");
 
   const domainMatch = !filters.domain
     ? true
     : job.domainKeys?.includes(filters.domain) ||
       (allowBroadDomainMatch && haystack.includes(filters.domain));
 
-  const roleMatch = !filters.role
+  const roleMatch = !roleFilter
     ? true
-    : job.roleKeys?.includes(filters.role) ||
-      title.includes(filters.role) ||
-      (allowPartialRoleMatch && haystack.includes(filters.role));
+    : job.roleKeys?.includes(roleFilter) ||
+      roleLabels.some((role) => role.includes(roleFilter)) ||
+      title.includes(roleFilter) ||
+      (allowPartialRoleMatch && haystack.includes(roleFilter));
 
+  const queryTokens = getQueryTokens(query);
   const queryMatch = !query
     ? true
-    : haystack.includes(query) ||
-      (allowPartialQueryMatch && getQueryTokens(query).some((token) => haystack.includes(token)));
+    : queryTokens.length > 0
+      ? queryTokens.some((token) => haystack.includes(token)) ||
+        (allowPartialQueryMatch && haystack.includes(query))
+      : haystack.includes(query);
 
   return domainMatch && roleMatch && queryMatch;
 }
@@ -886,15 +916,23 @@ function normalizeKeyPart(value: string): string {
 }
 
 function mergeJobs(primaryJobs: GroupedJob[], jobSpyJobs: GroupedJob[]): GroupedJob[] {
-  const seen = new Set<string>();
   const merged: GroupedJob[] = [];
+  const seenPrimaryIds = new Set<string>();
+  const seenCompanyTitle = new Set<string>();
 
-  for (const job of [...primaryJobs, ...jobSpyJobs]) {
-    const baseCompany = normalizeKeyPart(job.company);
-    const title = normalizeKeyPart(job.title);
-    const key = `${baseCompany}::${title}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
+  for (const job of primaryJobs) {
+    const idKey = (job.id || "").trim();
+    if (idKey && seenPrimaryIds.has(idKey)) continue;
+
+    if (idKey) seenPrimaryIds.add(idKey);
+    seenCompanyTitle.add(`${normalizeKeyPart(job.company)}::${normalizeKeyPart(job.title)}`);
+    merged.push(job);
+  }
+
+  for (const job of jobSpyJobs) {
+    const key = `${normalizeKeyPart(job.company)}::${normalizeKeyPart(job.title)}`;
+    if (seenCompanyTitle.has(key)) continue;
+    seenCompanyTitle.add(key);
     merged.push(job);
   }
 
@@ -919,7 +957,12 @@ function filterJobs(
 
 function filterByRevenueCategory(jobs: GroupedJob[], category?: RevenueCategoryKey) {
   if (!category) return jobs;
-  return jobs.filter((job) => getRevenueCategoryKey(job.revenue ?? null) === category);
+
+  return jobs.filter((job) => {
+    const revenueKeyFromNumber = getRevenueCategoryKey(job.revenue ?? null);
+    const revenueKeyFromLabel = REVENUE_KEY_BY_LABEL[asLowerText(job.revenueCategory)];
+    return revenueKeyFromNumber === category || revenueKeyFromLabel === category;
+  });
 }
 
 function validateCompanyCounts(
@@ -1129,7 +1172,7 @@ export async function GET(req: NextRequest) {
         domainKeys: roleDomainKeys,
         skills,
         description: roleRow.description ?? "",
-        location: roleRow.location,
+        location: roleRow.location ?? company.location ?? "Unknown",
         createdAt: roleRow.posted_at ?? roleRow.created_at ?? company.created_at,
         revenueCategory: revenueLabel,
         revenue,
@@ -1181,7 +1224,7 @@ export async function GET(req: NextRequest) {
         domainKeys: job.domainKeys,
         skills: [],
         description: job.description,
-        location: job.location,
+        location: job.location ?? company?.location ?? "Unknown",
         createdAt: new Date().toISOString(),
         revenueCategory: revenueCategoryLabel,
         revenue,
@@ -1191,6 +1234,8 @@ export async function GET(req: NextRequest) {
   }
 
   const mergedJobs = mergeJobs(primaryJobs, jobSpyJobs);
+  console.log("Revenue categories in dataset:", [...new Set(mergedJobs.map((job) => job.revenueCategory))]);
+  console.log("Total jobs:", mergedJobs.length);
   let mergedFiltered = filterByRevenueCategory(
     filterJobs(mergedJobs, {
       domain: effectiveDomain,
@@ -1260,7 +1305,7 @@ export async function GET(req: NextRequest) {
           domainKeys: job.domainKeys,
           skills: [],
           description: job.description,
-          location: job.location,
+          location: job.location ?? company?.location ?? "Unknown",
           createdAt: new Date().toISOString(),
           revenueCategory: revenueCategoryLabel,
           revenue,
@@ -1291,6 +1336,7 @@ export async function GET(req: NextRequest) {
   }
 
   console.log("Filtered jobs count:", mergedFiltered.length);
+  console.log("After revenue filter:", mergedFiltered.length);
 
   const primaryGrouped = groupByCompany(primaryFiltered, companyById);
   const mergedGrouped = groupByCompany(mergedFiltered, companyById);
@@ -1310,6 +1356,7 @@ export async function GET(req: NextRequest) {
   const annotated = withIndeedValidation.filter(
     (company) => !enforceOpenRoles || company.jobCount > 0
   );
+  console.log("Companies returned:", annotated.length);
 
   logValidationSummary({
     totalPrimaryJobs: primaryJobs.length,
