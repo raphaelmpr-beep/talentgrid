@@ -118,6 +118,23 @@ export default function CompaniesPage() {
       setLoading(true);
       setError(null);
 
+      const fetchCompanies = async (searchParams: URLSearchParams) => {
+        const response = await fetch(`/api/companies?${searchParams.toString()}`, {
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          const body = await response.json().catch(() => null);
+          const msg =
+            body && typeof body.error === "string"
+              ? body.error
+              : `Failed: ${response.status}`;
+          throw new Error(msg);
+        }
+
+        return (await response.json()) as PageResponse;
+      };
+
       const params = new URLSearchParams();
       params.set("isHiring", "true");
       if (q.trim()) params.set("q", q.trim());
@@ -125,20 +142,21 @@ export default function CompaniesPage() {
       if (effectiveRole !== "all") params.set("role", effectiveRole);
       if (revenueCategory !== "all") params.set("revenueCategory", revenueCategory);
 
-      fetch(`/api/companies?${params.toString()}`, { signal: controller.signal })
-        .then(async (r) => {
-          if (!r.ok) {
-            const body = await r.json().catch(() => null);
-            const msg =
-              body && typeof body.error === "string"
-                ? body.error
-                : `Failed: ${r.status}`;
-            throw new Error(msg);
-          }
-          return (await r.json()) as PageResponse;
-        })
+      fetchCompanies(params)
         .then((nextPage) => {
-          setItems(nextPage.data ?? []);
+          const nextItems = nextPage.data ?? [];
+          if (nextItems.length > 0 || revenueCategory === "all") {
+            setItems(nextItems);
+            return;
+          }
+
+          const fallbackParams = new URLSearchParams(params);
+          fallbackParams.delete("revenueCategory");
+
+          return fetchCompanies(fallbackParams).then((fallbackPage) => {
+            setItems(fallbackPage.data ?? []);
+            setRevenueCategory("all");
+          });
         })
         .catch((e: unknown) => {
           if ((e as { name?: string })?.name === "AbortError") return;
