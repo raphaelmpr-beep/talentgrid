@@ -490,6 +490,23 @@ function groupByCompany(
 
 type AggregatedCompany = ReturnType<typeof groupByCompany>[number];
 
+function isCommonFilterCombination(filters: {
+  domain?: DomainKey;
+  revenueCategory?: RevenueCategoryKey;
+}) {
+  const commonDomains = new Set<DomainKey>(["finance", "hr", "sales", "healthcare", "ai"]);
+  return (
+    filters.revenueCategory === "100m_600m" ||
+    (filters.domain ? commonDomains.has(filters.domain) : false)
+  );
+}
+
+function isMissingCriticalData(company: AggregatedCompany): boolean {
+  const missingLocation = !asLowerText(company.location);
+  const missingRoles = !company.rolesSummary || company.rolesSummary.length === 0;
+  return missingLocation || missingRoles;
+}
+
 function buildEmbeddedRoles(jobs: GroupedJob[]): EmbeddedRole[] {
   return jobs.map((job) => ({
     id: job.id,
@@ -557,9 +574,19 @@ async function enforceMinimumJobs(
 
   return Promise.all(
     companies.map(async (company) => {
-      if (company.jobs.length > 1) return company;
+      const needsMinJobsFallback = company.jobs.length <= 1;
+      const needsCriticalDataFallback = isMissingCriticalData(company);
+      if (!needsMinJobsFallback && !needsCriticalDataFallback) return company;
 
-      console.warn("Low job count detected for:", company.name);
+      if (needsMinJobsFallback) {
+        console.warn("Low job count detected for:", company.name);
+      }
+      if (needsCriticalDataFallback) {
+        console.warn("Critical data missing for:", company.name, {
+          locationMissing: !asLowerText(company.location),
+          rolesMissing: !company.rolesSummary || company.rolesSummary.length === 0,
+        });
+      }
 
       const fallback = await fetchJobSpyJobs(company.name);
       if (fallback.length === 0) return company;
@@ -592,24 +619,33 @@ async function enforceMinimumJobs(
         filters.revenueCategory
       );
 
-      if (filteredJobs.length <= company.jobs.length) return company;
+      if (filteredJobs.length <= company.jobs.length && !needsCriticalDataFallback) return company;
 
       console.log("Enhancing company data:", company.name);
 
       const summaries = buildCompanySummariesFromJobs(filteredJobs);
+      const fallbackLocation =
+        company.location ??
+        filteredJobs.find((job) => asLowerText(job.location))?.location ??
+        null;
       const primaryCount = company.primaryCount ?? 0;
-      const mergedCount = filteredJobs.length;
+      const mergedCount = Math.max(filteredJobs.length, company.jobCount);
       const discrepancy = mergedCount - primaryCount;
+      const enhancedJobs = filteredJobs.length > 0 ? filteredJobs : company.jobs;
 
       return {
         ...company,
-        jobs: filteredJobs,
-        jobCount: filteredJobs.length,
-        open_roles_count: filteredJobs.length,
-        domains: summaries.domains,
-        rolesSummary: summaries.rolesSummary,
-        roles: summaries.roles,
-        role_families: summaries.role_families,
+        location: fallbackLocation,
+        jobs: enhancedJobs,
+        jobCount: enhancedJobs.length,
+        open_roles_count: enhancedJobs.length,
+        domains: summaries.domains.length > 0 ? summaries.domains : company.domains,
+        rolesSummary: summaries.rolesSummary.length > 0 ? summaries.rolesSummary : company.rolesSummary,
+        roles: summaries.roles.length > 0 ? summaries.roles : company.roles,
+        role_families:
+          Object.keys(summaries.role_families).length > 0
+            ? summaries.role_families
+            : company.role_families,
         primaryCount,
         mergedCount,
         discrepancy,
@@ -632,6 +668,36 @@ function enforceJobCountIntegrity(companies: AggregatedCompany[]): AggregatedCom
       jobCount: expected,
       open_roles_count: expected,
     };
+  });
+}
+
+function logValidationSummary(context: {
+  totalPrimaryJobs: number;
+  totalMergedJobs: number;
+  filteredJobs: number;
+  companiesReturned: number;
+  companies: AggregatedCompany[];
+}) {
+  console.log("Validation summary:", {
+    totalJobsRetrieved: context.totalPrimaryJobs,
+    mergedJobsCount: context.totalMergedJobs,
+    filteredJobCount: context.filteredJobs,
+    companiesReturned: context.companiesReturned,
+  });
+
+  context.companies.forEach((company) => {
+    console.log("Company job count:", {
+      company: company.name,
+      jobCount: company.jobCount,
+      jobsLength: company.jobs.length,
+    });
+
+    if (company.jobCount <= 1) {
+      console.warn("Company with only 1 job after validation:", company.name);
+    }
+    if (!asLowerText(company.location)) {
+      console.warn("Missing location after validation:", company.name);
+    }
   });
 }
 
@@ -940,7 +1006,7 @@ export async function GET(req: NextRequest) {
   }
 
   const mergedJobs = mergeJobs(primaryJobs, jobSpyJobs);
-  const mergedFiltered = filterByRevenueCategory(
+  let mergedFiltered = filterByRevenueCategory(
     filterJobs(mergedJobs, {
       domain: effectiveDomain,
       role: effectiveRole,
@@ -948,6 +1014,56 @@ export async function GET(req: NextRequest) {
     }),
     revenueCategory
   );
+
+  const commonCombo = isCommonFilterCombination({
+    domain: effectiveDomain,
+    revenueCategory,
+  });
+
+  if (mergedFiltered.length === 0 && commonCombo) {
+    console.warn("Unexpected empty result set for common filter combination", {
+      domain: effectiveDomain,
+      role: effectiveRole,
+      revenueCategory,
+      query: freeText || q || "",
+    });
+
+    const emptyFallbackQuery = freeText || q || effectiveDomain || effectiveRole || "engineer";
+    const emptyFallbackRaw = await fetchJobSpyJobs(emptyFallbackQuery);
+    const emptyFallbackJobs: GroupedJob[] = emptyFallbackRaw.map((job) => {
+      const company = companyByName.get(normalizeKeyPart(job.company));
+      const revenue = getCompanyRevenue(company?.metadata);
+      const revenueCategoryLabel = getRevenueCategoryLabel(revenue);
+
+      return {
+        id: job.id,
+        title: job.title,
+        company: job.company,
+        companyId: company?.id ?? `jobspy-${normalizeKeyPart(job.company)}`,
+        roles: job.roles,
+        roleKeys: job.roleKeys,
+        domains: job.domains,
+        domainKeys: job.domainKeys,
+        skills: [],
+        description: job.description,
+        location: job.location,
+        createdAt: new Date().toISOString(),
+        revenueCategory: revenueCategoryLabel,
+        revenue,
+        source: "jobspy",
+      };
+    });
+
+    const fallbackMergedJobs = mergeJobs(mergedJobs, emptyFallbackJobs);
+    mergedFiltered = filterByRevenueCategory(
+      filterJobs(fallbackMergedJobs, {
+        domain: effectiveDomain,
+        role: effectiveRole,
+        query: freeText,
+      }),
+      revenueCategory
+    );
+  }
 
   console.log("Filtered jobs count:", mergedFiltered.length);
 
@@ -964,6 +1080,14 @@ export async function GET(req: NextRequest) {
   const annotated = withIntegrity.filter(
     (company) => !enforceOpenRoles || company.jobCount > 0
   );
+
+  logValidationSummary({
+    totalPrimaryJobs: primaryJobs.length,
+    totalMergedJobs: mergedJobs.length,
+    filteredJobs: mergedFiltered.length,
+    companiesReturned: annotated.length,
+    companies: annotated,
+  });
 
   return NextResponse.json({
     data: annotated,
