@@ -105,7 +105,7 @@ export default function CompaniesPage() {
   const [q, setQ] = React.useState("");
   const [domain, setDomain] = React.useState("all");
   const [role, setRole] = React.useState("all");
-  const [revenueCategory, setRevenueCategory] = React.useState("100m_600m");
+  const [revenueCategory, setRevenueCategory] = React.useState("all");
   const [sort, setSort] = React.useState<SortKey>("job_count_desc");
 
   const smartQuery = React.useMemo(() => parseQuery(q), [q]);

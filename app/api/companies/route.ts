@@ -494,7 +494,10 @@ type ValidatedCompany = AggregatedCompany & {
   mergedCount?: number;
   discrepancy?: number;
   jobSpyCount?: number;
-  confidence?: "confirmed" | "enhanced";
+  enhanced?: boolean;
+  source_discrepancy?: boolean;
+  indeedEstimate?: number;
+  confidence?: "confirmed" | "enhanced" | "low";
 };
 
 function isCommonFilterCombination(filters: {
@@ -512,6 +515,151 @@ function isMissingCriticalData(company: AggregatedCompany): boolean {
   const missingLocation = !asLowerText(company.location);
   const missingRoles = !company.rolesSummary || company.rolesSummary.length === 0;
   return missingLocation || missingRoles;
+}
+
+function buildFallbackQueryTerms(context: {
+  query?: string;
+  domain?: DomainKey;
+  role?: string;
+}) {
+  return [context.query, context.role, context.domain].filter((value) => Boolean(value)).join(" ");
+}
+
+function getQueryTokens(query: string): string[] {
+  return query
+    .split(/\s+/)
+    .map((token) => token.trim().toLowerCase())
+    .filter((token) => token.length > 2);
+}
+
+function jobMatchesFilters(
+  job: GroupedJob,
+  filters: {
+    domain?: DomainKey;
+    role?: string;
+    query?: string;
+  },
+  options?: {
+    allowPartialRoleMatch?: boolean;
+    allowBroadDomainMatch?: boolean;
+    allowPartialQueryMatch?: boolean;
+  }
+) {
+  const query = normaliseFreeText(filters.query);
+  const allowPartialRoleMatch = options?.allowPartialRoleMatch ?? false;
+  const allowBroadDomainMatch = options?.allowBroadDomainMatch ?? false;
+  const allowPartialQueryMatch = options?.allowPartialQueryMatch ?? false;
+  const title = asLowerText(job.title);
+  const description = asLowerText(job.description);
+  const company = asLowerText(job.company);
+  const haystack = [title, description, company, job.roles?.join(" ") ?? ""].join(" ");
+
+  const domainMatch = !filters.domain
+    ? true
+    : job.domainKeys?.includes(filters.domain) ||
+      (allowBroadDomainMatch && haystack.includes(filters.domain));
+
+  const roleMatch = !filters.role
+    ? true
+    : job.roleKeys?.includes(filters.role) ||
+      title.includes(filters.role) ||
+      (allowPartialRoleMatch && haystack.includes(filters.role));
+
+  const queryMatch = !query
+    ? true
+    : haystack.includes(query) ||
+      (allowPartialQueryMatch && getQueryTokens(query).some((token) => haystack.includes(token)));
+
+  return domainMatch && roleMatch && queryMatch;
+}
+
+async function fetchIndeedEstimate(searchQuery: string): Promise<number | null> {
+  const query = searchQuery.trim();
+  if (!query) return null;
+
+  const url = new URL("https://www.indeed.com/jobs");
+  url.searchParams.set("q", query);
+  url.searchParams.set("l", "");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+
+  try {
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Accept: "text/html,application/xhtml+xml",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      },
+      cache: "no-store",
+      signal: controller.signal,
+    });
+
+    if (!response.ok) return null;
+
+    const html = await response.text();
+    const patterns = [
+      /Page\s+\d+\s+of\s+([\d,]+)\s+jobs?/i,
+      /About\s+([\d,]+)\s+jobs?/i,
+      /([\d,]+)\s+jobs?\s+found/i,
+      /([\d,]+)\s+openings?/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = html.match(pattern);
+      if (!match) continue;
+
+      const estimate = Number(match[1].replaceAll(",", ""));
+      if (Number.isFinite(estimate)) return estimate;
+    }
+
+    return null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function validateAgainstIndeed(
+  companies: ValidatedCompany[],
+  context: { query?: string; domain?: DomainKey; role?: string }
+): Promise<ValidatedCompany[]> {
+  return Promise.all(
+    companies.map(async (company) => {
+      const shouldValidate = company.jobCount <= 1 || (company.discrepancy ?? 0) > 0;
+      if (!shouldValidate) return company;
+
+      const searchQuery = [company.name, buildFallbackQueryTerms(context)]
+        .filter((value) => Boolean(value))
+        .join(" ")
+        .trim();
+      const estimate = await fetchIndeedEstimate(searchQuery);
+      if (estimate == null) return company;
+
+      const significantlyHigher = estimate >= Math.max(company.jobCount + 2, company.jobCount * 2, 3);
+      if (!significantlyHigher) {
+        return {
+          ...company,
+          indeedEstimate: estimate,
+        };
+      }
+
+      console.warn("Indeed discrepancy detected", {
+        company: company.name,
+        internalJobCount: company.jobCount,
+        indeedEstimate: estimate,
+        searchQuery,
+      });
+
+      return {
+        ...company,
+        indeedEstimate: estimate,
+        source_discrepancy: true,
+        confidence: "low" as const,
+      };
+    })
+  );
 }
 
 function buildEmbeddedRoles(jobs: GroupedJob[]): EmbeddedRole[] {
@@ -586,7 +734,10 @@ async function enforceMinimumJobs(
       if (!needsMinJobsFallback && !needsCriticalDataFallback) return company;
 
       if (needsMinJobsFallback) {
-        console.warn("Low job count detected for:", company.name);
+        console.warn("Low job count detected → JobSpy triggered", {
+          company: company.name,
+          jobCount: company.jobCount,
+        });
       }
       if (needsCriticalDataFallback) {
         console.warn("Critical data missing for:", company.name, {
@@ -595,7 +746,11 @@ async function enforceMinimumJobs(
         });
       }
 
-      const fallback = await fetchJobSpyJobs(company.name);
+      const fallbackQuery = [company.name, normalizedQuery, filters.role, filters.domain]
+        .filter((value) => Boolean(value))
+        .join(" ")
+        .trim();
+      const fallback = await fetchJobSpyJobs(fallbackQuery || company.name);
       if (fallback.length === 0) return company;
 
       const fallbackJobs: GroupedJob[] = fallback.map((job) => ({
@@ -618,11 +773,19 @@ async function enforceMinimumJobs(
 
       const mergedJobs = mergeJobs(company.jobs, fallbackJobs);
       const filteredJobs = filterByRevenueCategory(
-        filterJobs(mergedJobs, {
-          domain: filters.domain,
-          role: filters.role,
-          query: normalizedQuery,
-        }),
+        filterJobs(
+          mergedJobs,
+          {
+            domain: filters.domain,
+            role: filters.role,
+            query: normalizedQuery,
+          },
+          {
+            allowPartialRoleMatch: true,
+            allowBroadDomainMatch: true,
+            allowPartialQueryMatch: true,
+          }
+        ),
         filters.revenueCategory
       );
 
@@ -657,6 +820,7 @@ async function enforceMinimumJobs(
         mergedCount,
         discrepancy,
         jobSpyCount: Math.max(0, discrepancy),
+        enhanced: true,
         confidence: discrepancy > 0 ? ("enhanced" as const) : ("confirmed" as const),
       };
     })
@@ -686,10 +850,15 @@ function logValidationSummary(context: {
   companies: ValidatedCompany[];
 }) {
   console.log("Validation summary:", {
-    totalJobsRetrieved: context.totalPrimaryJobs,
+    totalJobsFetched: context.totalPrimaryJobs,
     mergedJobsCount: context.totalMergedJobs,
     filteredJobCount: context.filteredJobs,
     companiesReturned: context.companiesReturned,
+    jobsPerCompany: context.companies.map((company) => ({
+      company: company.name,
+      jobCount: company.jobCount,
+      jobsLength: company.jobs.length,
+    })),
   });
 
   context.companies.forEach((company) => {
@@ -738,21 +907,14 @@ function filterJobs(
     domain?: DomainKey;
     role?: string;
     query?: string;
+  },
+  options?: {
+    allowPartialRoleMatch?: boolean;
+    allowBroadDomainMatch?: boolean;
+    allowPartialQueryMatch?: boolean;
   }
 ) {
-  const query = normaliseFreeText(filters.query);
-
-  return jobs.filter((job) => {
-    const domainMatch = !filters.domain || job.domainKeys?.includes(filters.domain);
-    const roleMatch = !filters.role || job.roleKeys?.includes(filters.role);
-    const queryMatch =
-      !query ||
-      asLowerText(job.title).includes(query) ||
-      asLowerText(job.description).includes(query) ||
-      asLowerText(job.company).includes(query);
-
-    return domainMatch && roleMatch && queryMatch;
-  });
+  return jobs.filter((job) => jobMatchesFilters(job, filters, options));
 }
 
 function filterByRevenueCategory(jobs: GroupedJob[], category?: RevenueCategoryKey) {
@@ -776,6 +938,7 @@ function validateCompanyCounts(
       mergedCount,
       discrepancy,
       jobSpyCount: Math.max(0, discrepancy),
+      enhanced: discrepancy > 0,
       confidence: discrepancy > 0 ? ("enhanced" as const) : ("confirmed" as const),
     };
   });
@@ -875,6 +1038,15 @@ export async function GET(req: NextRequest) {
   if (!supabase) return supabaseNotConfiguredResponse();
 
   const enforceOpenRoles = isHiring !== false;
+  console.log("Primary fetch complete", {
+    query: q ?? "",
+    isHiring,
+    page,
+    pageSize,
+    revenueCategory,
+    domain,
+    role: effectiveRole,
+  });
   const { data: companies, error: companiesErr } = await fetchAllCompanies(supabase, isHiring);
   if (companiesErr) {
     return NextResponse.json({ error: companiesErr.message }, { status: 500 });
@@ -988,7 +1160,11 @@ export async function GET(req: NextRequest) {
   let jobSpyJobs: GroupedJob[] = [];
   const shouldTriggerJobSpy = Boolean(freeText) || primaryFiltered.length < 5;
   if (shouldTriggerJobSpy) {
-    const secondary = await fetchJobSpyJobs(freeText || q || "");
+    console.warn("Low job count detected → JobSpy triggered", {
+      primaryFiltered: primaryFiltered.length,
+      query: freeText || q || "",
+    });
+    const secondary = await fetchJobSpyJobs(freeText || q || buildFallbackQueryTerms({ domain: effectiveDomain, role: effectiveRole }) || "engineer");
     jobSpyJobs = secondary.map((job) => {
       const company = companyByName.get(normalizeKeyPart(job.company));
       const revenue = getCompanyRevenue(company?.metadata);
@@ -1029,49 +1205,89 @@ export async function GET(req: NextRequest) {
     revenueCategory,
   });
 
-  if (mergedFiltered.length === 0 && commonCombo) {
-    console.warn("Unexpected empty result set for common filter combination", {
+  if (mergedFiltered.length === 0) {
+    console.warn("Fallback triggered due to empty dataset", {
       domain: effectiveDomain,
       role: effectiveRole,
       revenueCategory,
       query: freeText || q || "",
     });
-
-    const emptyFallbackQuery = freeText || q || effectiveDomain || effectiveRole || "engineer";
-    const emptyFallbackRaw = await fetchJobSpyJobs(emptyFallbackQuery);
-    const emptyFallbackJobs: GroupedJob[] = emptyFallbackRaw.map((job) => {
-      const company = companyByName.get(normalizeKeyPart(job.company));
-      const revenue = getCompanyRevenue(company?.metadata);
-      const revenueCategoryLabel = getRevenueCategoryLabel(revenue);
-
-      return {
-        id: job.id,
-        title: job.title,
-        company: job.company,
-        companyId: company?.id ?? `jobspy-${normalizeKeyPart(job.company)}`,
-        roles: job.roles,
-        roleKeys: job.roleKeys,
-        domains: job.domains,
-        domainKeys: job.domainKeys,
-        skills: [],
-        description: job.description,
-        location: job.location,
-        createdAt: new Date().toISOString(),
-        revenueCategory: revenueCategoryLabel,
-        revenue,
-        source: "jobspy",
-      };
-    });
-
-    const fallbackMergedJobs = mergeJobs(mergedJobs, emptyFallbackJobs);
-    mergedFiltered = filterByRevenueCategory(
-      filterJobs(fallbackMergedJobs, {
-        domain: effectiveDomain,
-        role: effectiveRole,
-        query: freeText,
-      }),
+    const relaxedFiltered = filterByRevenueCategory(
+      filterJobs(
+        mergedJobs,
+        {
+          domain: effectiveDomain,
+          role: effectiveRole,
+          query: freeText,
+        },
+        {
+          allowPartialRoleMatch: true,
+          allowBroadDomainMatch: true,
+          allowPartialQueryMatch: true,
+        }
+      ),
       revenueCategory
     );
+
+    if (relaxedFiltered.length > 0) {
+      mergedFiltered = relaxedFiltered;
+    } else {
+      console.warn("Empty results → fallback triggered", {
+        domain: effectiveDomain,
+        role: effectiveRole,
+        revenueCategory,
+        query: freeText || q || "",
+      });
+
+      const emptyFallbackQuery =
+        buildFallbackQueryTerms({ domain: effectiveDomain, role: effectiveRole, query: freeText || q || "" }) ||
+        q ||
+        "engineer";
+      const emptyFallbackRaw = await fetchJobSpyJobs(emptyFallbackQuery);
+      const emptyFallbackJobs: GroupedJob[] = emptyFallbackRaw.map((job) => {
+        const company = companyByName.get(normalizeKeyPart(job.company));
+        const revenue = getCompanyRevenue(company?.metadata);
+        const revenueCategoryLabel = getRevenueCategoryLabel(revenue);
+
+        return {
+          id: job.id,
+          title: job.title,
+          company: job.company,
+          companyId: company?.id ?? `jobspy-${normalizeKeyPart(job.company)}`,
+          roles: job.roles,
+          roleKeys: job.roleKeys,
+          domains: job.domains,
+          domainKeys: job.domainKeys,
+          skills: [],
+          description: job.description,
+          location: job.location,
+          createdAt: new Date().toISOString(),
+          revenueCategory: revenueCategoryLabel,
+          revenue,
+          source: "jobspy",
+        };
+      });
+
+      const fallbackMergedJobs = mergeJobs(mergedJobs, emptyFallbackJobs);
+      const fallbackRelaxed = filterByRevenueCategory(
+        filterJobs(
+          fallbackMergedJobs,
+          {
+            domain: effectiveDomain,
+            role: effectiveRole,
+            query: freeText,
+          },
+          {
+            allowPartialRoleMatch: true,
+            allowBroadDomainMatch: true,
+            allowPartialQueryMatch: true,
+          }
+        ),
+        revenueCategory
+      );
+
+      mergedFiltered = fallbackRelaxed.length > 0 ? fallbackRelaxed : filterByRevenueCategory(fallbackMergedJobs, revenueCategory);
+    }
   }
 
   console.log("Filtered jobs count:", mergedFiltered.length);
@@ -1085,8 +1301,13 @@ export async function GET(req: NextRequest) {
     revenueCategory,
   });
   const withIntegrity = enforceJobCountIntegrity(minimumJobsValidated);
+  const withIndeedValidation = await validateAgainstIndeed(withIntegrity, {
+    query: freeText || q || "",
+    domain: effectiveDomain,
+    role: effectiveRole,
+  });
 
-  const annotated = withIntegrity.filter(
+  const annotated = withIndeedValidation.filter(
     (company) => !enforceOpenRoles || company.jobCount > 0
   );
 

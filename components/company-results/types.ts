@@ -69,6 +69,9 @@ export type CompanyResult = {
   mergedCount?: number;
   discrepancy?: number;
   jobSpyCount?: number;
-  confidence?: "confirmed" | "enhanced";
+  enhanced?: boolean;
+  source_discrepancy?: boolean;
+  indeedEstimate?: number;
+  confidence?: "confirmed" | "enhanced" | "low";
   created_at: string;
 };

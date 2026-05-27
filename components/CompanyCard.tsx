@@ -54,8 +54,17 @@ export function CompanyCard({ company }: { company: CompanyResult }) {
             Primary: {company.primaryCount ?? company.jobCount} | JobSpy: +{company.jobSpyCount ?? 0}
           </p>
           <p className="font-medium">
-            {company.confidence === "enhanced" ? "Enhanced results" : "Confirmed results"}
+            {company.source_discrepancy
+              ? "Source discrepancy flagged"
+              : company.confidence === "enhanced"
+                ? "Enhanced results"
+                : company.confidence === "low"
+                  ? "Low confidence"
+                  : "Confirmed results"}
           </p>
+          {typeof company.indeedEstimate === "number" && (
+            <p>Indeed estimate: {company.indeedEstimate}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
