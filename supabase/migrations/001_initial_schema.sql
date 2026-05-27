@@ -37,6 +37,7 @@ create index if not exists companies_annual_revenue_idx
 create table if not exists public.roles (
   id              uuid primary key default gen_random_uuid(),
   company_id      uuid not null references public.companies(id) on delete cascade,
+  external_id     text,
   title           text not null,
   description     text,
   location        text,
@@ -59,6 +60,8 @@ create table if not exists public.roles (
 create index if not exists roles_company_id_idx on public.roles (company_id);
 create index if not exists roles_is_active_idx on public.roles (is_active);
 create index if not exists roles_ghost_score_idx on public.roles (ghost_score);
+create unique index if not exists roles_company_external_id_uq
+  on public.roles (company_id, external_id);
 
 -- Favorites (user-scoped)
 create table if not exists public.favorites (

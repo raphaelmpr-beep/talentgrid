@@ -158,11 +158,11 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   if (!supabase) return supabaseNotConfiguredResponse();
 
-  // Use live role activity as the source of truth for "hiring" state.
   const enforceOpenRoles = isHiring !== false;
   let hiringCompanyIds: string[] | null = null;
   let familyCompanyIds: string[] | null = null;
   let activeRoles: RoleRow[] = [];
+
   if (enforceOpenRoles || family) {
     const { data: activeRoleRows, error: rolesErr } = await fetchAllActiveRoles(
       supabase,
