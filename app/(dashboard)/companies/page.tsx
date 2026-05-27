@@ -7,6 +7,7 @@ import { Select } from "@/components/ui/select";
 import { SearchBar } from "@/components/SearchBar";
 import { DomainFilter } from "@/components/DomainFilter";
 import { RoleFilter } from "@/components/RoleFilter";
+import { RevenueFilter } from "@/components/RevenueFilter";
 import { CompanyList } from "@/components/CompanyList";
 import type { CompanyResult } from "@/components/company-results/types";
 
@@ -46,6 +47,15 @@ const ROLE_OPTIONS = [
   { value: "devops", label: "DevOps/SRE" },
   { value: "data", label: "Data" },
   { value: "ml", label: "ML/AI" },
+];
+
+const REVENUE_OPTIONS = [
+  { value: "all", label: "All" },
+  { value: "lt_50m", label: "<50M" },
+  { value: "50m_100m", label: "50M-100M" },
+  { value: "100m_600m", label: "100M-600M" },
+  { value: "600m_1b", label: "600M-1B" },
+  { value: "gt_1b", label: "1B+" },
 ];
 
 const DOMAIN_QUERY_KEYWORDS: Array<[string, string[]]> = [
@@ -98,6 +108,7 @@ export default function CompaniesPage() {
   const [debouncedQ, setDebouncedQ] = React.useState("");
   const [domain, setDomain] = React.useState("all");
   const [role, setRole] = React.useState("all");
+  const [revenueCategory, setRevenueCategory] = React.useState("100m_600m");
   const [sort, setSort] = React.useState<SortKey>("job_count_desc");
 
   React.useEffect(() => {
@@ -119,6 +130,7 @@ export default function CompaniesPage() {
     if (debouncedQ) params.set("q", debouncedQ);
     if (effectiveDomain !== "all") params.set("domain", effectiveDomain);
     if (effectiveRole !== "all") params.set("role", effectiveRole);
+    if (revenueCategory !== "all") params.set("revenueCategory", revenueCategory);
 
     fetch(`/api/companies?${params.toString()}`)
       .then(async (r) => {
@@ -146,7 +158,7 @@ export default function CompaniesPage() {
     return () => {
       cancelled = true;
     };
-  }, [debouncedQ, effectiveDomain, effectiveRole]);
+  }, [debouncedQ, effectiveDomain, effectiveRole, revenueCategory]);
 
   const filteredSorted = React.useMemo(() => {
     const sorted = [...items];
@@ -184,6 +196,11 @@ export default function CompaniesPage() {
             onChange={setQ}
             detectedDomain={smartQuery.detectedDomain}
             detectedRole={smartQuery.detectedRole}
+          />
+          <RevenueFilter
+            options={REVENUE_OPTIONS}
+            value={revenueCategory}
+            onChange={setRevenueCategory}
           />
           <DomainFilter options={DOMAIN_OPTIONS} value={effectiveDomain} onChange={setDomain} />
           <RoleFilter options={ROLE_OPTIONS} value={effectiveRole} onChange={setRole} />

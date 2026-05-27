@@ -14,6 +14,7 @@ export function CompanyCard({ company }: { company: CompanyResult }) {
           <div>
             <h3 className="text-lg font-semibold text-neutral-900">{company.name}</h3>
             <p className="text-sm text-neutral-500">{company.location || "Location not listed"}</p>
+            <p className="text-sm font-medium text-emerald-700">{company.revenueCategory}</p>
           </div>
           <div className="text-right">
             <div className="text-2xl font-semibold tabular-nums text-neutral-900">

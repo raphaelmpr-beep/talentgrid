@@ -41,6 +41,14 @@ export const COMPANY_DOMAINS = [
   "ai",
 ] as const;
 
+export const COMPANY_REVENUE_CATEGORIES = [
+  "lt_50m",
+  "50m_100m",
+  "100m_600m",
+  "600m_1b",
+  "gt_1b",
+] as const;
+
 function normaliseFamilyAlias(value: unknown): unknown {
   if (typeof value !== "string") return value;
   const v = value.trim().toLowerCase();
@@ -55,6 +63,7 @@ export const companyQuerySchema = z
     family: z.preprocess(normaliseFamilyAlias, z.enum(COMPANY_ROLE_FAMILIES).optional()),
     role: z.preprocess(normaliseFamilyAlias, z.enum(COMPANY_ROLE_FAMILIES).optional()),
     domain: z.enum(COMPANY_DOMAINS).optional(),
+    revenueCategory: z.enum(COMPANY_REVENUE_CATEGORIES).optional(),
     isHiring: z
       .union([z.literal("true"), z.literal("false")])
       .optional()

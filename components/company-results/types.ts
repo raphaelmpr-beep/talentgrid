@@ -8,6 +8,8 @@ export type Job = {
   description: string;
   location?: string | null;
   createdAt: string;
+  revenueCategory?: string;
+  revenue?: number | null;
   remote?: boolean | null;
   employment_type?: string | null;
   seniority?: string | null;
@@ -22,6 +24,13 @@ export type Job = {
 export type RoleSummaryItem = {
   role: string;
   count: number;
+};
+
+export type CompanyMeta = {
+  company: string;
+  revenueCategory: string;
+  revenue?: number | null;
+  location?: string | null;
 };
 
 export type CompanyResult = {
@@ -53,5 +62,8 @@ export type CompanyResult = {
   domains: string[];
   rolesSummary: RoleSummaryItem[];
   jobs: Job[];
+  companyMeta: CompanyMeta;
+  revenueCategory: string;
+  revenue?: number | null;
   created_at: string;
 };
