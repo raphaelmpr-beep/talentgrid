@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { formatCompactNumber } from "@/lib/utils";
 import type { CompanyResult } from "@/components/company-results/types";
@@ -51,9 +50,12 @@ export function CompanyCard({ company }: { company: CompanyResult }) {
 
         <div className="flex items-center justify-between pt-2">
           <p className="text-xs text-neutral-500">Full job data included for drill-down.</p>
-          <Button asChild size="sm">
-            <Link href={`/companies/${company.id}`}>View Jobs</Link>
-          </Button>
+          <Link
+            href={`/companies/${company.id}`}
+            className="inline-flex h-8 items-center justify-center rounded-md bg-neutral-900 px-3 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
+          >
+            View Jobs
+          </Link>
         </div>
       </CardContent>
     </Card>
