@@ -32,6 +32,15 @@ export const COMPANY_ROLE_FAMILIES = [
   "engineer",
 ] as const;
 
+export const COMPANY_DOMAINS = [
+  "hr",
+  "sales",
+  "finance",
+  "robotics",
+  "healthcare",
+  "ai",
+] as const;
+
 function normaliseFamilyAlias(value: unknown): unknown {
   if (typeof value !== "string") return value;
   const v = value.trim().toLowerCase();
@@ -41,23 +50,30 @@ function normaliseFamilyAlias(value: unknown): unknown {
 
 export const companyQuerySchema = z
   .object({
-    page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(1000).default(20),
+    page: z.coerce.number().int().min(1).optional(),
+    pageSize: z.coerce.number().int().min(1).optional(),
     family: z.preprocess(normaliseFamilyAlias, z.enum(COMPANY_ROLE_FAMILIES).optional()),
+    role: z.preprocess(normaliseFamilyAlias, z.enum(COMPANY_ROLE_FAMILIES).optional()),
+    domain: z.enum(COMPANY_DOMAINS).optional(),
     isHiring: z
       .union([z.literal("true"), z.literal("false")])
       .optional()
       .transform((v) => (v === undefined ? undefined : v === "true")),
     q: z.string().max(200).optional(),
-    minRevenue: z.coerce.number().int().min(0).default(DEFAULT_MIN_REVENUE),
-    maxRevenue: z.coerce.number().int().min(0).default(DEFAULT_MAX_REVENUE),
+    minRevenue: z.coerce.number().int().min(0).optional(),
+    maxRevenue: z.coerce.number().int().min(0).optional(),
     includeUnknownRevenue: z
       .union([z.literal("true"), z.literal("false")])
       .optional()
       .default("true")
       .transform((v) => v === "true"),
   })
-  .refine((v) => v.minRevenue <= v.maxRevenue, {
+  .refine((v) => {
+    if (typeof v.minRevenue !== "number" || typeof v.maxRevenue !== "number") {
+      return true;
+    }
+    return v.minRevenue <= v.maxRevenue;
+  }, {
     message: "minRevenue must be less than or equal to maxRevenue",
     path: ["minRevenue"],
   });
