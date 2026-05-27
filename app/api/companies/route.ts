@@ -931,7 +931,8 @@ export async function GET(req: NextRequest) {
     for (const roleRow of companyRoles) {
       const roleFamily = getRoleFamily(roleRow);
       const roleLabel = inferRoleFamilyLabel(roleFamily);
-      const roleDomains = inferJobDomains(company, roleRow).map((d) => DOMAIN_LABELS[d]);
+      const roleDomainKeys = inferJobDomains(company, roleRow);
+      const roleDomains = roleDomainKeys.map((d) => DOMAIN_LABELS[d]);
       const metadata = roleRow.metadata ?? {};
       const skills = [
         ...extractStringArray(metadata["skills"]),
@@ -946,6 +947,7 @@ export async function GET(req: NextRequest) {
         roles: [roleLabel],
         roleKeys: roleFamily ? [roleFamily] : [],
         domains: roleDomains,
+        domainKeys: roleDomainKeys,
         skills,
         description: roleRow.description ?? "",
         location: roleRow.location,
