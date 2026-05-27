@@ -386,9 +386,11 @@ function groupByCompany(
   const map = new Map<string, GroupedCompanyEntry>();
 
   jobs.forEach((job) => {
-    if (!map.has(job.companyId)) {
+    const companyKey = normalizeKeyPart(job.company);
+
+    if (!map.has(companyKey)) {
       const company = companyById.get(job.companyId);
-      map.set(job.companyId, {
+      map.set(companyKey, {
         id: job.companyId,
         company: job.company,
         location: company?.location,
@@ -410,7 +412,7 @@ function groupByCompany(
       });
     }
 
-    const entry = map.get(job.companyId)!;
+    const entry = map.get(companyKey)!;
     entry.jobCount += 1;
     entry.jobs.push(job);
     job.domains?.forEach((d) => entry.domains.add(d));
