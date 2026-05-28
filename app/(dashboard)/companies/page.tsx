@@ -111,6 +111,8 @@ export default function CompaniesPage() {
   const smartQuery = React.useMemo(() => parseQuery(q), [q]);
   const effectiveDomain = domain === "all" ? smartQuery.detectedDomain ?? "all" : domain;
   const effectiveRole = role === "all" ? smartQuery.detectedRole ?? "all" : role;
+  const selectedRevenueLabel =
+    REVENUE_OPTIONS.find((option) => option.value === revenueCategory)?.label ?? "All";
 
   React.useEffect(() => {
     const controller = new AbortController();
@@ -144,19 +146,7 @@ export default function CompaniesPage() {
 
       fetchCompanies(params)
         .then((nextPage) => {
-          const nextItems = nextPage.data ?? [];
-          if (nextItems.length > 0 || revenueCategory === "all") {
-            setItems(nextItems);
-            return;
-          }
-
-          const fallbackParams = new URLSearchParams(params);
-          fallbackParams.delete("revenueCategory");
-
-          return fetchCompanies(fallbackParams).then((fallbackPage) => {
-            setItems(fallbackPage.data ?? []);
-            setRevenueCategory("all");
-          });
+          setItems(nextPage.data ?? []);
         })
         .catch((e: unknown) => {
           if ((e as { name?: string })?.name === "AbortError") return;
@@ -225,7 +215,9 @@ export default function CompaniesPage() {
           <RoleFilter options={ROLE_OPTIONS} value={effectiveRole} onChange={setRole} />
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-neutral-500">Showing all matching results with no hard cap.</p>
+            <p className="text-xs text-neutral-500">
+              Showing all matching results with no hard cap. Revenue filter: {selectedRevenueLabel}.
+            </p>
             <div className="flex items-center gap-2">
               <label htmlFor="sort" className="text-xs uppercase tracking-wide text-neutral-500">
                 Sort
@@ -254,6 +246,13 @@ export default function CompaniesPage() {
 
       {loading ? (
         <div className="flex justify-center py-10 text-sm text-neutral-600">Loading jobs...</div>
+      ) : filteredSorted.length === 0 ? (
+        <div className="rounded-md border border-neutral-200 bg-neutral-50 p-4 text-sm text-neutral-700">
+          No companies match the current filters.
+          {revenueCategory !== "all" && (
+            <span> Try a different revenue range or switch Revenue to All.</span>
+          )}
+        </div>
       ) : (
         <CompanyList companies={filteredSorted} />
       )}
