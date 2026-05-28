@@ -172,13 +172,6 @@ const REVENUE_LABELS: Record<RevenueCategoryKey, string> = {
   gt_1b: "1B+",
 };
 
-const REVENUE_KEY_BY_LABEL: Record<string, RevenueCategoryKey> = {
-  "<50m": "lt_50m",
-  "50m-100m": "50m_100m",
-  "100m-600m": "100m_600m",
-  "600m-1b": "600m_1b",
-  "1b+": "gt_1b",
-};
 
 function asLowerText(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
@@ -400,6 +393,19 @@ function getRevenueCategoryLabel(revenue: number | null): string {
   return key ? REVENUE_LABELS[key] : "Unknown";
 }
 
+function filterCompaniesByRevenue(
+  companies: CompanyRow[],
+  revenue?: RevenueCategoryKey
+): CompanyRow[] {
+  if (!revenue) return companies;
+
+  return companies.filter((company) => {
+    const companyRevenue = getCompanyRevenue(company.metadata);
+    const companyRevenueKey = getRevenueCategoryKey(companyRevenue);
+    return companyRevenueKey === revenue;
+  });
+}
+
 function groupByCompany(
   jobs: GroupedJob[],
   companyById: Map<string, CompanyRow>
@@ -523,17 +529,6 @@ type ValidatedCompany = AggregatedCompany & {
   indeedEstimate?: number;
   confidence?: "confirmed" | "enhanced" | "low";
 };
-
-function isCommonFilterCombination(filters: {
-  domain?: DomainKey;
-  revenueCategory?: RevenueCategoryKey;
-}) {
-  const commonDomains = new Set<DomainKey>(["finance", "hr", "sales", "healthcare", "ai"]);
-  return (
-    filters.revenueCategory === "100m_600m" ||
-    (filters.domain ? commonDomains.has(filters.domain) : false)
-  );
-}
 
 function isMissingCriticalData(company: AggregatedCompany): boolean {
   const missingLocation = !asLowerText(company.location);
@@ -802,21 +797,18 @@ async function enforceMinimumJobs(
       }));
 
       const mergedJobs = mergeJobs(company.jobs, fallbackJobs);
-      const filteredJobs = filterByRevenueCategory(
-        filterJobs(
-          mergedJobs,
-          {
-            domain: filters.domain,
-            role: filters.role,
-            query: normalizedQuery,
-          },
-          {
-            allowPartialRoleMatch: true,
-            allowBroadDomainMatch: true,
-            allowPartialQueryMatch: true,
-          }
-        ),
-        filters.revenueCategory
+      const filteredJobs = filterJobs(
+        mergedJobs,
+        {
+          domain: filters.domain,
+          role: filters.role,
+          query: normalizedQuery,
+        },
+        {
+          allowPartialRoleMatch: true,
+          allowBroadDomainMatch: true,
+          allowPartialQueryMatch: true,
+        }
       );
 
       if (filteredJobs.length <= company.jobs.length && !needsCriticalDataFallback) return company;
@@ -953,16 +945,6 @@ function filterJobs(
   }
 ) {
   return jobs.filter((job) => jobMatchesFilters(job, filters, options));
-}
-
-function filterByRevenueCategory(jobs: GroupedJob[], category?: RevenueCategoryKey) {
-  if (!category) return jobs;
-
-  return jobs.filter((job) => {
-    const revenueKeyFromNumber = getRevenueCategoryKey(job.revenue ?? null);
-    const revenueKeyFromLabel = REVENUE_KEY_BY_LABEL[asLowerText(job.revenueCategory)];
-    return revenueKeyFromNumber === category || revenueKeyFromLabel === category;
-  });
 }
 
 function validateCompanyCounts(
@@ -1119,7 +1101,7 @@ export async function GET(req: NextRequest) {
   const effectiveMaxRevenue =
     typeof maxRevenue === "number" ? maxRevenue : Number.MAX_SAFE_INTEGER;
 
-  const revenueFiltered = shouldFilterRevenue
+  const rangeFilteredCompanies = shouldFilterRevenue
     ? (companies ?? []).filter((company) =>
         hasRevenueOverlap(
           company.metadata,
@@ -1130,13 +1112,30 @@ export async function GET(req: NextRequest) {
       )
     : companies ?? [];
 
-  const companyById = new Map(revenueFiltered.map((company) => [company.id, company]));
+  const filteredCompanies = filterCompaniesByRevenue(rangeFilteredCompanies, revenueCategory);
+  const effectiveCompanies =
+    filteredCompanies.length === 0 && revenueCategory
+      ? rangeFilteredCompanies
+      : filteredCompanies;
+
+  if (filteredCompanies.length === 0 && revenueCategory) {
+    console.warn("No companies matched revenue category; falling back to all revenue categories", {
+      requestedRevenueCategory: revenueCategory,
+      fallbackCompanies: effectiveCompanies.length,
+    });
+  }
+
+  console.log("Companies after revenue filter:", effectiveCompanies.length);
+
+  const companyById = new Map(effectiveCompanies.map((company) => [company.id, company]));
   const companyByName = new Map(
-    revenueFiltered.map((company) => [normalizeKeyPart(company.name), company])
+    effectiveCompanies.map((company) => [normalizeKeyPart(company.name), company])
   );
+  const validCompanyIdSet = new Set(effectiveCompanies.map((company) => company.id));
+  const validCompanyNameSet = new Set(effectiveCompanies.map((company) => normalizeKeyPart(company.name)));
 
   const primaryJobs: GroupedJob[] = [];
-  for (const company of revenueFiltered) {
+  for (const company of effectiveCompanies) {
     const companyRoles = [...(rolesByCompany.get(company.id) ?? [])].sort((a, b) => {
       const aPosted = a.posted_at ? Date.parse(a.posted_at) : 0;
       const bPosted = b.posted_at ? Date.parse(b.posted_at) : 0;
@@ -1191,14 +1190,14 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const primaryFiltered = filterByRevenueCategory(
-    filterJobs(primaryJobs, {
-      domain: effectiveDomain,
-      role: effectiveRole,
-      query: freeText,
-    }),
-    revenueCategory
-  );
+  const jobsForCompanies = primaryJobs.filter((job) => validCompanyIdSet.has(job.companyId));
+  console.log("Jobs after company filter:", jobsForCompanies.length);
+
+  const primaryFiltered = filterJobs(jobsForCompanies, {
+    domain: effectiveDomain,
+    role: effectiveRole,
+    query: freeText,
+  });
 
   let jobSpyJobs: GroupedJob[] = [];
   const shouldTriggerJobSpy = Boolean(freeText) || primaryFiltered.length < 5;
@@ -1208,88 +1207,9 @@ export async function GET(req: NextRequest) {
       query: freeText || q || "",
     });
     const secondary = await fetchJobSpyJobs(freeText || q || buildFallbackQueryTerms({ domain: effectiveDomain, role: effectiveRole }) || "engineer");
-    jobSpyJobs = secondary.map((job) => {
-      const company = companyByName.get(normalizeKeyPart(job.company));
-      const revenue = getCompanyRevenue(company?.metadata);
-      const revenueCategoryLabel = getRevenueCategoryLabel(revenue);
-
-      return {
-        id: job.id,
-        title: job.title,
-        company: job.company,
-        companyId: company?.id ?? `jobspy-${normalizeKeyPart(job.company)}`,
-        roles: job.roles,
-        roleKeys: job.roleKeys,
-        domains: job.domains,
-        domainKeys: job.domainKeys,
-        skills: [],
-        description: job.description,
-        location: job.location ?? company?.location ?? "Unknown",
-        createdAt: new Date().toISOString(),
-        revenueCategory: revenueCategoryLabel,
-        revenue,
-        source: "jobspy",
-      };
-    });
-  }
-
-  const mergedJobs = mergeJobs(primaryJobs, jobSpyJobs);
-  console.log("Revenue categories in dataset:", [...new Set(mergedJobs.map((job) => job.revenueCategory))]);
-  console.log("Total jobs:", mergedJobs.length);
-  let mergedFiltered = filterByRevenueCategory(
-    filterJobs(mergedJobs, {
-      domain: effectiveDomain,
-      role: effectiveRole,
-      query: freeText,
-    }),
-    revenueCategory
-  );
-
-  const commonCombo = isCommonFilterCombination({
-    domain: effectiveDomain,
-    revenueCategory,
-  });
-
-  if (mergedFiltered.length === 0) {
-    console.warn("Fallback triggered due to empty dataset", {
-      domain: effectiveDomain,
-      role: effectiveRole,
-      revenueCategory,
-      query: freeText || q || "",
-    });
-    const relaxedFiltered = filterByRevenueCategory(
-      filterJobs(
-        mergedJobs,
-        {
-          domain: effectiveDomain,
-          role: effectiveRole,
-          query: freeText,
-        },
-        {
-          allowPartialRoleMatch: true,
-          allowBroadDomainMatch: true,
-          allowPartialQueryMatch: true,
-        }
-      ),
-      revenueCategory
-    );
-
-    if (relaxedFiltered.length > 0) {
-      mergedFiltered = relaxedFiltered;
-    } else {
-      console.warn("Empty results → fallback triggered", {
-        domain: effectiveDomain,
-        role: effectiveRole,
-        revenueCategory,
-        query: freeText || q || "",
-      });
-
-      const emptyFallbackQuery =
-        buildFallbackQueryTerms({ domain: effectiveDomain, role: effectiveRole, query: freeText || q || "" }) ||
-        q ||
-        "engineer";
-      const emptyFallbackRaw = await fetchJobSpyJobs(emptyFallbackQuery);
-      const emptyFallbackJobs: GroupedJob[] = emptyFallbackRaw.map((job) => {
+    jobSpyJobs = secondary
+      .filter((job) => validCompanyNameSet.has(normalizeKeyPart(job.company)))
+      .map((job) => {
         const company = companyByName.get(normalizeKeyPart(job.company));
         const revenue = getCompanyRevenue(company?.metadata);
         const revenueCategoryLabel = getRevenueCategoryLabel(revenue);
@@ -1312,31 +1232,99 @@ export async function GET(req: NextRequest) {
           source: "jobspy",
         };
       });
+  }
+
+  const mergedJobs = mergeJobs(jobsForCompanies, jobSpyJobs);
+  console.log("Revenue categories in dataset:", [...new Set(mergedJobs.map((job) => job.revenueCategory))]);
+  console.log("Total jobs:", mergedJobs.length);
+  let mergedFiltered = filterJobs(mergedJobs, {
+    domain: effectiveDomain,
+    role: effectiveRole,
+    query: freeText,
+  });
+
+  if (mergedFiltered.length === 0) {
+    console.warn("Fallback triggered due to empty dataset", {
+      domain: effectiveDomain,
+      role: effectiveRole,
+      revenueCategory,
+      query: freeText || q || "",
+    });
+    const relaxedFiltered = filterJobs(
+      mergedJobs,
+      {
+        domain: effectiveDomain,
+        role: effectiveRole,
+        query: freeText,
+      },
+      {
+        allowPartialRoleMatch: true,
+        allowBroadDomainMatch: true,
+        allowPartialQueryMatch: true,
+      }
+    );
+
+    if (relaxedFiltered.length > 0) {
+      mergedFiltered = relaxedFiltered;
+    } else {
+      console.warn("Empty results → fallback triggered", {
+        domain: effectiveDomain,
+        role: effectiveRole,
+        revenueCategory,
+        query: freeText || q || "",
+      });
+
+      const emptyFallbackQuery =
+        buildFallbackQueryTerms({ domain: effectiveDomain, role: effectiveRole, query: freeText || q || "" }) ||
+        q ||
+        "engineer";
+      const emptyFallbackRaw = await fetchJobSpyJobs(emptyFallbackQuery);
+      const emptyFallbackJobs: GroupedJob[] = emptyFallbackRaw
+        .filter((job) => validCompanyNameSet.has(normalizeKeyPart(job.company)))
+        .map((job) => {
+          const company = companyByName.get(normalizeKeyPart(job.company));
+          const revenue = getCompanyRevenue(company?.metadata);
+          const revenueCategoryLabel = getRevenueCategoryLabel(revenue);
+
+          return {
+            id: job.id,
+            title: job.title,
+            company: job.company,
+            companyId: company?.id ?? `jobspy-${normalizeKeyPart(job.company)}`,
+            roles: job.roles,
+            roleKeys: job.roleKeys,
+            domains: job.domains,
+            domainKeys: job.domainKeys,
+            skills: [],
+            description: job.description,
+            location: job.location ?? company?.location ?? "Unknown",
+            createdAt: new Date().toISOString(),
+            revenueCategory: revenueCategoryLabel,
+            revenue,
+            source: "jobspy",
+          };
+        });
 
       const fallbackMergedJobs = mergeJobs(mergedJobs, emptyFallbackJobs);
-      const fallbackRelaxed = filterByRevenueCategory(
-        filterJobs(
-          fallbackMergedJobs,
-          {
-            domain: effectiveDomain,
-            role: effectiveRole,
-            query: freeText,
-          },
-          {
-            allowPartialRoleMatch: true,
-            allowBroadDomainMatch: true,
-            allowPartialQueryMatch: true,
-          }
-        ),
-        revenueCategory
+      const fallbackRelaxed = filterJobs(
+        fallbackMergedJobs,
+        {
+          domain: effectiveDomain,
+          role: effectiveRole,
+          query: freeText,
+        },
+        {
+          allowPartialRoleMatch: true,
+          allowBroadDomainMatch: true,
+          allowPartialQueryMatch: true,
+        }
       );
 
-      mergedFiltered = fallbackRelaxed.length > 0 ? fallbackRelaxed : filterByRevenueCategory(fallbackMergedJobs, revenueCategory);
+      mergedFiltered = fallbackRelaxed.length > 0 ? fallbackRelaxed : fallbackMergedJobs;
     }
   }
 
-  console.log("Filtered jobs count:", mergedFiltered.length);
-  console.log("After revenue filter:", mergedFiltered.length);
+  console.log("Jobs after filters:", mergedFiltered.length);
 
   const primaryGrouped = groupByCompany(primaryFiltered, companyById);
   const mergedGrouped = groupByCompany(mergedFiltered, companyById);
