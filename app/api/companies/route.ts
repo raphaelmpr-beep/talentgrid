@@ -1233,14 +1233,14 @@ export async function GET(req: NextRequest) {
     });
     const secondary = await fetchJobSpyJobs(freeText || q || buildFallbackQueryTerms({ domain: effectiveDomain, role: effectiveRole }) || "engineer");
     jobSpyJobs = secondary
-      .map((job) => {
+      .map((job): GroupedJob | null => {
         const company = companyByName.get(normalizeKeyPart(job.company));
         if (!company) return null;
 
         const revenue = getCompanyRevenue(company.metadata);
         const revenueCategoryLabel = getRevenueCategoryLabel(revenue);
 
-        return {
+        const normalizedJob: GroupedJob = {
           id: job.id,
           title: job.title,
           company: company.name,
@@ -1255,8 +1255,10 @@ export async function GET(req: NextRequest) {
           createdAt: new Date().toISOString(),
           revenueCategory: revenueCategoryLabel,
           revenue,
-          source: "jobspy" as const,
+          source: "jobspy",
         };
+
+        return normalizedJob;
       })
       .filter((job): job is GroupedJob => job !== null);
   }
@@ -1307,14 +1309,14 @@ export async function GET(req: NextRequest) {
         "engineer";
       const emptyFallbackRaw = await fetchJobSpyJobs(emptyFallbackQuery);
       const emptyFallbackJobs: GroupedJob[] = emptyFallbackRaw
-        .map((job) => {
+        .map((job): GroupedJob | null => {
           const company = companyByName.get(normalizeKeyPart(job.company));
           if (!company) return null;
 
           const revenue = getCompanyRevenue(company.metadata);
           const revenueCategoryLabel = getRevenueCategoryLabel(revenue);
 
-          return {
+          const normalizedJob: GroupedJob = {
             id: job.id,
             title: job.title,
             company: company.name,
@@ -1329,8 +1331,10 @@ export async function GET(req: NextRequest) {
             createdAt: new Date().toISOString(),
             revenueCategory: revenueCategoryLabel,
             revenue,
-            source: "jobspy" as const,
+            source: "jobspy",
           };
+
+          return normalizedJob;
         })
         .filter((job): job is GroupedJob => job !== null);
 
