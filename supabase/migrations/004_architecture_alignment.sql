@@ -36,6 +36,38 @@ create index if not exists companies_role_tags_gin_idx
   on public.companies using gin (role_tags);
 
 -- ---------------------------------------------------------------------------
+-- Compatibility: external_id.
+-- The canonical schema (001/003) and all app + Drizzle code key roles by
+-- external_id. Some production databases were provisioned from an earlier
+-- schema that named this column external_job_id instead. Guarantee the
+-- canonical column exists and, when the legacy column is present, backfill it
+-- once so dedup keys and the job_openings view below resolve correctly. Both
+-- steps are additive and idempotent; the legacy column is left in place.
+-- ---------------------------------------------------------------------------
+alter table public.roles
+  add column if not exists external_id text;
+
+do $$
+begin
+  if exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'roles'
+      and column_name = 'external_job_id'
+  ) then
+    execute 'update public.roles
+               set external_id = external_job_id
+             where external_id is null
+               and external_job_id is not null';
+  end if;
+end
+$$;
+
+create unique index if not exists roles_company_external_id_uq
+  on public.roles (company_id, external_id);
+
+-- ---------------------------------------------------------------------------
 -- Roles (job openings): normalised role/domain categories.
 -- These mirror the classifier families the API already infers at read time
 -- (role_family / domain keys) so ingestion can persist them once and the
