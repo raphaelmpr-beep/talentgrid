@@ -59,6 +59,12 @@ export type CompanyResult = {
     role_family?: string | null;
   }>;
   jobCount: number;
+  active_openings_matching_filters?: number;
+  active_openings_total?: number;
+  latest_job_seen_at?: string | null;
+  top_roles?: RoleSummaryItem[];
+  revenue_band?: string;
+  domain_tags?: string[];
   domains: string[];
   rolesSummary: RoleSummaryItem[];
   jobs: Job[];

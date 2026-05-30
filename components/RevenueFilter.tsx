@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export type RevenueOption = {
   value: string;
@@ -24,7 +25,12 @@ export function RevenueFilter({
             type="button"
             size="sm"
             variant={value === option.value ? "default" : "outline"}
-            className="min-h-[40px] whitespace-nowrap rounded-full px-4 py-2 active:scale-95"
+            aria-pressed={value === option.value}
+            className={cn(
+              "min-h-[40px] whitespace-nowrap rounded-full px-4 py-2 active:scale-95",
+              value === option.value &&
+                "font-semibold ring-2 ring-neutral-900 ring-offset-1"
+            )}
             onClick={() => onChange(option.value)}
           >
             {option.label}

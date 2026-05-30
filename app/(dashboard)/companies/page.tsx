@@ -21,6 +21,8 @@ type PageResponse = {
 
 type SortKey = "job_count_desc" | "job_count_asc" | "name_asc" | "newest";
 
+const PAGE_SIZE = 20;
+
 type SmartQuery = {
   detectedDomain?: string;
   detectedRole?: string;
@@ -107,6 +109,7 @@ export default function CompaniesPage() {
   const [role, setRole] = React.useState("all");
   const [revenueCategory, setRevenueCategory] = React.useState("all");
   const [sort, setSort] = React.useState<SortKey>("job_count_desc");
+  const [page, setPage] = React.useState(1);
 
   const smartQuery = React.useMemo(() => parseQuery(q), [q]);
   const effectiveDomain = domain === "all" ? smartQuery.detectedDomain ?? "all" : domain;
@@ -187,6 +190,17 @@ export default function CompaniesPage() {
     return sorted;
   }, [items, sort]);
 
+  React.useEffect(() => {
+    setPage(1);
+  }, [q, effectiveDomain, effectiveRole, revenueCategory, sort]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredSorted.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageItems = React.useMemo(
+    () => filteredSorted.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filteredSorted, currentPage]
+  );
+
   return (
     <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-4">
@@ -216,7 +230,8 @@ export default function CompaniesPage() {
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-neutral-500">
-              Showing all matching results with no hard cap. Revenue filter: {selectedRevenueLabel}.
+              {filteredSorted.length} compan{filteredSorted.length === 1 ? "y" : "ies"} matched
+              {" "}· showing {PAGE_SIZE} per page. Revenue filter: {selectedRevenueLabel}.
             </p>
             <div className="flex items-center gap-2">
               <label htmlFor="sort" className="text-xs uppercase tracking-wide text-neutral-500">
@@ -254,7 +269,32 @@ export default function CompaniesPage() {
           )}
         </div>
       ) : (
-        <CompanyList companies={filteredSorted} />
+        <>
+          <CompanyList companies={pageItems} />
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-4 py-4">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage <= 1}
+                className="inline-flex min-h-[40px] items-center rounded-md border border-neutral-300 px-4 text-sm font-medium disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <span className="text-sm tabular-nums text-neutral-600">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage >= totalPages}
+                className="inline-flex min-h-[40px] items-center rounded-md border border-neutral-300 px-4 text-sm font-medium disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

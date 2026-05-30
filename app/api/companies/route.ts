@@ -51,6 +51,9 @@ type CompanyRow = {
   logo_url?: string | null;
   website?: string | null;
   is_hiring: boolean;
+  revenue_band?: string | null;
+  domain_tags?: string[] | null;
+  role_tags?: string[] | null;
   metadata?: Record<string, unknown> | null;
   created_at: string;
   updated_at?: string;
@@ -400,9 +403,18 @@ function getRevenueCategoryLabel(revenue: number | null): string {
   return key ? REVENUE_LABELS[key] : "Unknown";
 }
 
+function getRevenueBandLabel(company: CompanyRow): string {
+  const explicit = asLowerText(company.revenue_band);
+  if (explicit && REVENUE_LABELS[explicit as RevenueCategoryKey]) {
+    return REVENUE_LABELS[explicit as RevenueCategoryKey];
+  }
+  return getRevenueCategoryLabel(getCompanyRevenue(company.metadata));
+}
+
 function groupByCompany(
   jobs: GroupedJob[],
-  companyById: Map<string, CompanyRow>
+  companyById: Map<string, CompanyRow>,
+  totalActiveByCompany?: Map<string, { count: number; latestSeenAt: string | null }>
 ) {
   const map = new Map<string, GroupedCompanyEntry>();
 
@@ -479,6 +491,18 @@ function groupByCompany(
         role_family: job.role_family,
       }));
 
+      const matchingCount = entry.jobs.length;
+      const totalActive = totalActiveByCompany?.get(entry.id);
+      const activeOpeningsTotal = Math.max(totalActive?.count ?? 0, matchingCount);
+      const latestFromJobs = entry.jobs.reduce<string | null>((latest, job) => {
+        const ts = job.posted_at ?? job.createdAt;
+        if (!ts) return latest;
+        if (!latest || Date.parse(ts) > Date.parse(latest)) return ts;
+        return latest;
+      }, null);
+      const latestJobSeenAt = totalActive?.latestSeenAt ?? latestFromJobs;
+      const company = companyById.get(entry.id);
+
       return {
         id: entry.id,
         name: entry.company,
@@ -492,8 +516,15 @@ function groupByCompany(
         created_at: entry.created_at,
         updated_at: entry.updated_at,
         // Server-enforced integrity: card count must always reflect real aggregated jobs.
-        jobCount: entry.jobs.length,
-        open_roles_count: entry.jobs.length,
+        jobCount: matchingCount,
+        open_roles_count: matchingCount,
+        // Architecture aggregations (company-first, intent-driven).
+        active_openings_matching_filters: matchingCount,
+        active_openings_total: activeOpeningsTotal,
+        latest_job_seen_at: latestJobSeenAt,
+        top_roles: rolesSummary.slice(0, 5),
+        revenue_band: company ? getRevenueBandLabel(company) : entry.revenueCategory,
+        domain_tags: extractStringArray(company?.domain_tags),
         domains: Array.from(entry.domains),
         rolesSummary,
         revenueCategory: entry.revenueCategory,
@@ -1084,7 +1115,11 @@ function getRoleFamily(role: RoleRow): string | null {
   return inferRoleFamilyFromTitle(role.title);
 }
 
+const DEFAULT_PAGE_SIZE = 20;
+
 export async function GET(req: NextRequest) {
+  const startedAt = Date.now();
+  const debug = req.nextUrl.searchParams.get("debug") === "true";
   const parsed = companyQuerySchema.safeParse(
     Object.fromEntries(req.nextUrl.searchParams)
   );
@@ -1150,11 +1185,20 @@ export async function GET(req: NextRequest) {
   }
 
   const rolesByCompany = new Map<string, RoleRow[]>();
+  const totalActiveByCompany = new Map<string, { count: number; latestSeenAt: string | null }>();
   for (const roleRow of roleRows ?? []) {
     if (!roleRow.company_id) continue;
     const bucket = rolesByCompany.get(roleRow.company_id) ?? [];
     bucket.push(roleRow);
     rolesByCompany.set(roleRow.company_id, bucket);
+
+    const agg = totalActiveByCompany.get(roleRow.company_id) ?? { count: 0, latestSeenAt: null };
+    agg.count += 1;
+    const seenAt = roleRow.posted_at ?? roleRow.created_at ?? null;
+    if (seenAt && (!agg.latestSeenAt || Date.parse(seenAt) > Date.parse(agg.latestSeenAt))) {
+      agg.latestSeenAt = seenAt;
+    }
+    totalActiveByCompany.set(roleRow.company_id, agg);
   }
 
   const companyById = new Map(revenueScopedCompanies.map((company) => [company.id, company]));
@@ -1360,8 +1404,8 @@ export async function GET(req: NextRequest) {
   console.log("Filtered jobs count:", mergedFiltered.length);
   console.log("After revenue filter:", mergedFiltered.length);
 
-  const primaryGrouped = groupByCompany(primaryFiltered, companyById);
-  const mergedGrouped = groupByCompany(mergedFiltered, companyById);
+  const primaryGrouped = groupByCompany(primaryFiltered, companyById, totalActiveByCompany);
+  const mergedGrouped = groupByCompany(mergedFiltered, companyById, totalActiveByCompany);
   const validated = validateCompanyCounts(primaryGrouped, mergedGrouped);
   const minimumJobsValidated = await enforceMinimumJobs(validated, freeText || q || "", {
     domain: effectiveDomain,
@@ -1388,22 +1432,45 @@ export async function GET(req: NextRequest) {
     companies: annotated,
   });
 
+  const filtersApplied = {
+    domain: effectiveDomain,
+    role: effectiveRole,
+    family,
+    revenueCategory,
+    minRevenue,
+    maxRevenue,
+    includeUnknownRevenue,
+    q,
+    smartQuery,
+    jobSpyTriggered: shouldTriggerJobSpy,
+  };
+
+  const queryTimeMs = Date.now() - startedAt;
+
   return NextResponse.json({
+    // Results are never artificially capped: `data` is the full matching set
+    // grouped by company. The UI paginates client-side at DEFAULT_PAGE_SIZE.
     data: annotated,
     page: page ?? 1,
-    pageSize: pageSize ?? annotated.length,
+    // Default to 20 per page when the caller doesn't specify; `total` always
+    // reflects the full result set so the UI can represent every company.
+    pageSize: pageSize ?? DEFAULT_PAGE_SIZE,
     total: annotated.length,
-    filters: {
-      domain: effectiveDomain,
-      role: effectiveRole,
-      family,
-      revenueCategory,
-      minRevenue,
-      maxRevenue,
-      includeUnknownRevenue,
-      q,
-      smartQuery,
-      jobSpyTriggered: shouldTriggerJobSpy,
-    },
+    filters: filtersApplied,
+    ...(debug
+      ? {
+          debug: {
+            total_jobs: primaryJobs.length,
+            filtered_jobs: mergedFiltered.length,
+            companies_returned: annotated.length,
+            filters_applied: filtersApplied,
+            fallbacks_triggered: {
+              jobspy: shouldTriggerJobSpy,
+              empty_dataset: mergedFiltered.length === 0,
+            },
+            query_time_ms: queryTimeMs,
+          },
+        }
+      : {}),
   });
 }

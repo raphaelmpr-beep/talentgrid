@@ -25,6 +25,10 @@ export const companies = pgTable(
     logoUrl: text("logo_url"),
     website: text("website"),
     isHiring: boolean("is_hiring").notNull().default(false),
+    revenueBand: text("revenue_band"),
+    domainTags: text("domain_tags").array().notNull().default(sql`'{}'::text[]`),
+    roleTags: text("role_tags").array().notNull().default(sql`'{}'::text[]`),
+    monitor: boolean("monitor").notNull().default(false),
     metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -32,6 +36,8 @@ export const companies = pgTable(
   (t) => ({
     isHiringIdx: index("companies_is_hiring_idx").on(t.isHiring),
     nameIdx: index("companies_name_idx").on(t.name),
+    revenueBandIdx: index("companies_revenue_band_idx").on(t.revenueBand),
+    monitorIdx: index("companies_monitor_idx").on(t.monitor),
   })
 );
 
@@ -53,6 +59,8 @@ export const roles = pgTable(
     salaryMax: integer("salary_max"),
     url: text("url"),
     source: text("source"),
+    roleCategory: text("role_category"),
+    domainCategory: text("domain_category"),
     isActive: boolean("is_active").notNull().default(true),
     ghostScore: integer("ghost_score").notNull().default(0),
     postedAt: timestamp("posted_at", { withTimezone: true }),
@@ -65,6 +73,8 @@ export const roles = pgTable(
     companyIdx: index("roles_company_id_idx").on(t.companyId),
     activeIdx: index("roles_is_active_idx").on(t.isActive),
     ghostScoreIdx: index("roles_ghost_score_idx").on(t.ghostScore),
+    roleCategoryIdx: index("roles_role_category_idx").on(t.roleCategory),
+    domainCategoryIdx: index("roles_domain_category_idx").on(t.domainCategory),
     companyExternalIdUq: uniqueIndex("roles_company_external_id_uq").on(
       t.companyId,
       t.externalId

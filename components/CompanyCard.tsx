@@ -1,11 +1,15 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { formatCompactNumber } from "@/lib/utils";
+import { formatCompactNumber, formatRelative } from "@/lib/utils";
 import type { CompanyResult } from "@/components/company-results/types";
 
 export function CompanyCard({ company }: { company: CompanyResult }) {
-  const topRoles = company.rolesSummary.slice(0, 3);
+  const topRoles = (company.top_roles ?? company.rolesSummary).slice(0, 3);
+  const matchingCount = company.active_openings_matching_filters ?? company.jobCount;
+  const totalCount = company.active_openings_total ?? company.jobCount;
+  const revenueBand = company.revenue_band ?? company.revenueCategory;
+  const latestSeen = formatRelative(company.latest_job_seen_at);
 
   return (
     <Card className="h-full overflow-hidden border-neutral-200">
@@ -14,13 +18,21 @@ export function CompanyCard({ company }: { company: CompanyResult }) {
           <div className="min-w-0 flex-1">
             <h3 className="break-words text-lg font-semibold text-neutral-900">{company.name}</h3>
             <p className="text-sm text-neutral-500">Location: {company.location || "Location not available"}</p>
-            <p className="text-sm font-medium text-emerald-700">{company.revenueCategory}</p>
+            <p className="text-sm font-medium text-emerald-700">{revenueBand}</p>
+            {latestSeen && (
+              <p className="text-xs text-neutral-400">Latest job seen {latestSeen}</p>
+            )}
           </div>
           <div className="shrink-0 text-right">
             <div className="text-2xl font-semibold tabular-nums text-neutral-900">
-              {formatCompactNumber(company.jobCount)}
+              {formatCompactNumber(matchingCount)}
             </div>
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Open roles</p>
+            <p className="text-xs uppercase tracking-wide text-neutral-500">Matching openings</p>
+            {totalCount > matchingCount && (
+              <p className="mt-0.5 text-xs text-neutral-400 tabular-nums">
+                {formatCompactNumber(totalCount)} total active
+              </p>
+            )}
           </div>
         </div>
 
