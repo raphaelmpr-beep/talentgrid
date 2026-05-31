@@ -22,6 +22,7 @@ import {
   normalizeCompanyKey,
   resolveCompanyNameAliases,
 } from "@/lib/companies/search-scope";
+import { decideCandidateRefresh } from "@/lib/feeds/candidate-refresh";
 
 export const runtime = "nodejs";
 // Vercel cron sends GET requests; we also accept POST for manual triggering.
@@ -57,6 +58,20 @@ type RefreshCompanyReport = {
   // authoritative count (e.g. Pinterest 176) from a shallow fallback.
   careers_portal_count_exact?: boolean;
   careers_portal_reason?: string;
+  // Candidate-source visibility. A validation-pending candidate (metadata
+  // fetch_enabled !== true) is exercised for dry-run validation, but a real run
+  // never promotes its non-exact sample to a count or active role rows. These
+  // fields make the candidate-validation vs. confirmed-source-fetch distinction
+  // explicit in the report so a non-exact sample can never be mistaken for a
+  // live active count.
+  candidate_source: boolean;
+  // companies.metadata.source_status (needs_live_http_validation /
+  // needs_source_mapping for candidates), echoed verbatim.
+  source_status: string | null;
+  // True when a real run actually wrote source_openings_total/exact + role rows
+  // for this company. False when persistence was withheld (see
+  // careers_portal_reason). Always false on a dry-run.
+  source_openings_persisted: boolean;
   jobspy_fallback: boolean;
   jobspy_jobs: number;
   merged: number;
@@ -90,6 +105,13 @@ type RefreshReport = {
   // in this batch, so a live test can confirm both providers are wired.
   careers_portal_companies: number;
   theirstack_companies: number;
+  // Validation-pending candidates (metadata fetch_enabled !== true) seen in this
+  // batch, and how many of those had an exact source persisted. The difference is
+  // the set of candidates whose non-exact sample was correctly withheld — making
+  // the candidate-validation vs. confirmed-source-fetch split visible at the top
+  // level, not just per-company.
+  candidate_companies: number;
+  source_openings_persisted_companies: number;
   has_more: boolean;
   next_offset: number | null;
   companies: RefreshCompanyReport[];
@@ -139,6 +161,29 @@ function careersUrlsFor(company: MonitoredCompany): {
     // carry them under its own keys.
     atsType: str(meta.ats_type) ?? str(source.ats_type) ?? str(source.type) ?? str(source.provider),
     atsSlug: str(meta.ats_slug) ?? str(source.ats_slug) ?? str(source.slug) ?? str(source.board),
+  };
+}
+
+// Read the candidate-trust flags the importer stored on companies.metadata.
+// fetch_enabled gates whether a source has been promoted past the candidate
+// stage; validation_enabled gates whether the source may be exercised at all;
+// source_status carries the needs_* mapping state. Defaults mirror the importer
+// (fetch_enabled=false, validation_enabled=true) so an un-flagged legacy row is
+// treated as a not-yet-promoted candidate rather than fetch-promoted.
+function candidateFlagsFor(company: MonitoredCompany): {
+  fetchEnabled: boolean;
+  validationEnabled: boolean;
+  sourceStatus: string | null;
+} {
+  const meta = company.metadata ?? {};
+  const bool = (v: unknown, fallback: boolean): boolean =>
+    typeof v === "boolean" ? v : fallback;
+  const str = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() ? v.trim() : null;
+  return {
+    fetchEnabled: bool(meta.fetch_enabled, false),
+    validationEnabled: bool(meta.validation_enabled, true),
+    sourceStatus: str(meta.source_status),
   };
 }
 
@@ -409,6 +454,7 @@ async function refreshCompany(
   dryRun: boolean,
   supabase: ReturnType<typeof createFeedAdminClient>
 ): Promise<RefreshCompanyReport> {
+  const candidateFlags = candidateFlagsFor(company);
   const report: RefreshCompanyReport = {
     company_id: company.id,
     name: company.name,
@@ -416,6 +462,9 @@ async function refreshCompany(
     careers_portal_attempted: false,
     careers_portal_jobs: 0,
     careers_portal_total: 0,
+    candidate_source: !candidateFlags.fetchEnabled,
+    source_status: candidateFlags.sourceStatus,
+    source_openings_persisted: false,
     jobspy_fallback: false,
     jobspy_jobs: 0,
     merged: 0,
@@ -528,6 +577,27 @@ async function refreshCompany(
   );
   report.merged = deduped.length + careersDeduped.length;
 
+  // Candidate-source safety gate. A validation-pending candidate (metadata
+  // fetch_enabled !== true) whose careers source did not resolve to an EXACT
+  // live inventory must not have its non-exact sample promoted on a real run:
+  // no source_openings_total/exact, and no scraped careers role rows written as
+  // active openings. The careers source is still exercised above so a dry-run
+  // can report the attempt (the production visibility we want), but the mutating
+  // path withholds the count and records an explicit needs_* reason. Exact
+  // sources are always persisted — that is what promotes a candidate to a
+  // confirmed source. Counts are never capped; we either persist the exact
+  // total or persist nothing.
+  const refreshDecision = decideCandidateRefresh({
+    fetchEnabled: candidateFlags.fetchEnabled,
+    validationEnabled: candidateFlags.validationEnabled,
+    countExact: report.careers_portal_count_exact ?? false,
+    totalCount: report.careers_portal_total,
+  });
+  if (report.careers_portal_attempted && !refreshDecision.mayPersist) {
+    report.careers_portal_reason =
+      report.careers_portal_reason ?? refreshDecision.reason ?? undefined;
+  }
+
   if (dryRun || !supabase) {
     return report;
   }
@@ -565,29 +635,35 @@ async function refreshCompany(
     seenTheirStackIds.push(job.external_id);
   }
 
-  for (const job of careersDeduped) {
-    const roleMapped = mapCareersPortalJobToRole(job);
-    const roleCategory = classifyRoleCategory(job.title, null);
-    const domainCategory = classifyDomainCategory(job.title, null, companyContext);
-    const { error } = await supabase.from("roles").upsert(
-      {
-        ...roleMapped,
-        company_id: company.id,
-        role_category: roleCategory,
-        domain_category: domainCategory,
-        is_active: true,
-        last_checked_at: new Date().toISOString(),
-      },
-      { onConflict: "company_id,external_id" }
-    );
-    if (error) {
-      report.errors.push(
-        `careers role upsert failed (${job.external_id}): ${error.message}`
+  // Careers-portal rows are only persisted as active openings when the source is
+  // trusted to persist (an exact live inventory on a validation-enabled company).
+  // A candidate's non-exact scrape sample is withheld so we never fabricate
+  // active role rows for a not-yet-validated source.
+  if (refreshDecision.mayPersist) {
+    for (const job of careersDeduped) {
+      const roleMapped = mapCareersPortalJobToRole(job);
+      const roleCategory = classifyRoleCategory(job.title, null);
+      const domainCategory = classifyDomainCategory(job.title, null, companyContext);
+      const { error } = await supabase.from("roles").upsert(
+        {
+          ...roleMapped,
+          company_id: company.id,
+          role_category: roleCategory,
+          domain_category: domainCategory,
+          is_active: true,
+          last_checked_at: new Date().toISOString(),
+        },
+        { onConflict: "company_id,external_id" }
       );
-      continue;
+      if (error) {
+        report.errors.push(
+          `careers role upsert failed (${job.external_id}): ${error.message}`
+        );
+        continue;
+      }
+      report.upserted += 1;
+      seenCareersIds.push(job.external_id);
     }
-    report.upserted += 1;
-    seenCareersIds.push(job.external_id);
   }
 
   // Deactivate stale rows per-source so a thin pull from one source never
@@ -610,13 +686,24 @@ async function refreshCompany(
   // Persist the authoritative source inventory total onto the company so the
   // dashboard / companies API can display it without re-fetching the ATS board
   // on every page load. Only written when the careers source was actually
-  // exercised this run.
-  if (report.careers_portal_attempted && report.careers_portal_total > 0) {
+  // exercised this run AND the candidate-safety gate permits persisting it: a
+  // validation-pending candidate's non-exact scrape sample is never promoted to
+  // a source_openings_total/exact (that would fabricate a live count), only an
+  // exact live inventory is. The reason for a withheld persist is already on
+  // report.careers_portal_reason.
+  if (
+    report.careers_portal_attempted &&
+    report.careers_portal_total > 0 &&
+    refreshDecision.mayPersist
+  ) {
     await persistSourceTotal(supabase, company, report, {
       careersUrl: resolvedCareersUrl,
       atsType,
       atsSlug,
     });
+    report.source_openings_persisted = report.errors.every(
+      (e) => !e.startsWith("source_total_persist_failed")
+    );
   }
 
   return report;
@@ -749,6 +836,9 @@ async function processCompanyBounded(
         careers_portal_jobs: 0,
         careers_portal_total: 0,
         careers_portal_reason: "company_budget_exceeded",
+        candidate_source: !candidateFlagsFor(company).fetchEnabled,
+        source_status: candidateFlagsFor(company).sourceStatus,
+        source_openings_persisted: false,
         jobspy_fallback: false,
         jobspy_jobs: 0,
         merged: 0,
@@ -806,6 +896,8 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     errored: 0,
     careers_portal_companies: 0,
     theirstack_companies: 0,
+    candidate_companies: 0,
+    source_openings_persisted_companies: 0,
     has_more: false,
     next_offset: null,
     companies: [],
@@ -856,6 +948,10 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     report.processed += 1;
     if (companyReport.theirstack_jobs > 0) report.theirstack_companies += 1;
     if (companyReport.careers_portal_attempted) report.careers_portal_companies += 1;
+    if (companyReport.candidate_source) report.candidate_companies += 1;
+    if (companyReport.source_openings_persisted) {
+      report.source_openings_persisted_companies += 1;
+    }
     if (companyReport.timed_out || companyReport.errors.length > 0) {
       report.errored += 1;
     }

@@ -58,6 +58,30 @@ validation workflow resolves a live source. `source_openings_total` /
 `source_openings_exact` are **never written by the importer** — they are
 promotable only after validation resolves an exact source.
 
+### Revenue filter: USD window vs. category
+
+`revenueCategory=100m_600m` and the explicit USD window
+`minRevenue=100000000&maxRevenue=600000000` select the **same** candidates.
+The USD window is whole-dollar USD — no million-unit scaling is applied, so pass
+`100000000`, not `100`. By default an explicit numeric window **excludes**
+companies that carry no revenue metadata (so a large metadata-less set can't leak
+into a precise range); a category/band filter still includes them. Pass
+`includeUnknownRevenue=true` to force unknown-revenue companies back into a
+numeric window. See `lib/companies/revenue-filter.ts`.
+
+### Cron refresh safety (`/api/cron/refresh-jobs`)
+
+A candidate (`metadata.fetch_enabled = false`) may be **validated in a dry-run**
+(`?dryRun=true`) so the report shows what its source returned, but a **real
+(mutating) run never promotes a non-exact sample**: it will not write
+`source_openings_total` / `source_openings_exact` and will not upsert scraped
+careers role rows as active openings. Only an **exact** live inventory
+(`countExact=true`) is persisted — that is the step that promotes a candidate to
+a confirmed source. A withheld persist is reported with an explicit reason
+(`candidate_source_not_exact_needs_live_validation`). Counts are never capped: a
+real run either persists the exact total verbatim or persists nothing. The
+decision lives in `lib/feeds/candidate-refresh.ts`.
+
 ## Importing (Supabase)
 
 **Production writes are gated — run a dry-run first and get confirmation.**
@@ -104,14 +128,22 @@ those totals are safe to promote to `source_openings_total` /
 `source_openings_exact`. See `docs/open-roles-validation.md` for the promotion
 runbook and the full `count_status` vocabulary.
 
-## Smoke test
+## Smoke tests
 
 ```bash
 npm run smoke:midmarket
+npm run smoke:candidate-guard
 ```
 
-Runs fully offline and asserts: all 121 records parse and join; every import
-input is validation-pending with no fabricated count (`fetch_enabled=false`,
-`is_hiring=false`, no `source_openings_total`); revenue bounds convert MUSD→USD
-inside the 100M–600M window; and an ATS-backed candidate reports its **full**
-inventory total even though the sample is bounded (the no-cap invariant).
+`smoke:midmarket` runs fully offline and asserts: all 121 records parse and join;
+every import input is validation-pending with no fabricated count
+(`fetch_enabled=false`, `is_hiring=false`, no `source_openings_total`); revenue
+bounds convert MUSD→USD inside the 100M–600M window; and an ATS-backed candidate
+reports its **full** inventory total even though the sample is bounded (the
+no-cap invariant).
+
+`smoke:candidate-guard` (also offline) asserts the two production fixes: the USD
+revenue window selects the same 121 companies as `revenueCategory=100m_600m` (not
+the inflated 344) and excludes metadata-less companies by default; and the cron
+refresh decision withholds a candidate's non-exact sample while persisting an
+exact source uncapped.

@@ -10,6 +10,10 @@ import {
   companyNameMatchStrengthWithAliases,
   type ResolvedSourceTotal,
 } from "@/lib/companies/search-scope";
+import {
+  hasRevenueOverlap,
+  resolveIncludeUnknownRevenue,
+} from "@/lib/companies/revenue-filter";
 
 export const runtime = "nodejs";
 
@@ -420,27 +424,6 @@ async function fetchAllCompanies(
   }
 
   return { data: rows, error: null };
-}
-
-function hasRevenueOverlap(
-  metadata: Record<string, unknown> | null | undefined,
-  minRevenue: number,
-  maxRevenue: number,
-  includeUnknownRevenue: boolean
-): boolean {
-  const m = metadata ?? {};
-  const annual = parseNumericValue(m["annual_revenue"]);
-  const min = parseNumericValue(m["revenue_min"]);
-  const max = parseNumericValue(m["revenue_max"]);
-
-  if (annual !== null) return annual >= minRevenue && annual <= maxRevenue;
-  if (min !== null || max !== null) {
-    const effectiveMin = min !== null ? min : Number.MIN_SAFE_INTEGER;
-    const effectiveMax = max !== null ? max : Number.MAX_SAFE_INTEGER;
-    return effectiveMax >= minRevenue && effectiveMin <= maxRevenue;
-  }
-
-  return includeUnknownRevenue;
 }
 
 function detectDomainKeys(text: string): Set<DomainKey> {
@@ -1498,6 +1481,17 @@ export async function GET(req: NextRequest) {
     revenueBand,
   } = parsed.data;
 
+  // An explicit USD revenue window must not be polluted by companies that carry
+  // no revenue metadata. Those companies are only included in an explicit range
+  // when the caller opts in (includeUnknownRevenue=true). For a category/band
+  // filter (or no revenue filter) the legacy default of including them stands.
+  const hasExplicitRevenueRange =
+    typeof minRevenue === "number" || typeof maxRevenue === "number";
+  const effectiveIncludeUnknownRevenue = resolveIncludeUnknownRevenue(
+    includeUnknownRevenue,
+    hasExplicitRevenueRange
+  );
+
   const smartQuery = parseSmartQuery(q);
   const effectiveRole = role ?? family ?? smartQuery.detectedRole;
   const effectiveDomain = domain ?? smartQuery.detectedDomain;
@@ -1527,7 +1521,7 @@ export async function GET(req: NextRequest) {
       revenueBand,
       minRevenue,
       maxRevenue,
-      includeUnknownRevenue,
+      includeUnknownRevenue: effectiveIncludeUnknownRevenue,
     })
   );
 
@@ -1958,7 +1952,7 @@ export async function GET(req: NextRequest) {
     revenueBand,
     minRevenue,
     maxRevenue,
-    includeUnknownRevenue,
+    includeUnknownRevenue: effectiveIncludeUnknownRevenue,
     includeZeroOpenings,
     q,
     smartQuery,

@@ -69,13 +69,25 @@ export const companyQuerySchema = z
       .optional()
       .transform((v) => (v === undefined ? undefined : v === "true")),
     q: z.string().max(200).optional(),
+    // Explicit revenue window in *USD* (e.g. minRevenue=100000000 &
+    // maxRevenue=600000000 for the 100M–600M band). Compared directly against
+    // metadata.annual_revenue and the metadata.revenue_min/revenue_max bounds —
+    // no million-unit scaling is applied, so callers must pass whole-dollar
+    // values. This mirrors the revenueCategory=100m_600m bucket for companies
+    // whose USD bounds sit inside the window.
     minRevenue: z.coerce.number().int().min(0).optional(),
     maxRevenue: z.coerce.number().int().min(0).optional(),
+    // Whether companies with no revenue metadata pass a revenue filter. Left
+    // undefined when the caller doesn't pass it so the route can choose a
+    // sensible default per query: unknown-revenue companies are INCLUDED for a
+    // category/band filter (legacy behaviour) but EXCLUDED from an explicit
+    // numeric USD window, so an unbounded set of metadata-less companies can no
+    // longer leak into a precise range query. Pass includeUnknownRevenue=true to
+    // force them back in even for a numeric range.
     includeUnknownRevenue: z
       .union([z.literal("true"), z.literal("false")])
       .optional()
-      .default("true")
-      .transform((v) => v === "true"),
+      .transform((v) => (v === undefined ? undefined : v === "true")),
     // Company-universe mode: when true, monitored companies are returned even
     // when they currently have 0 active openings, so the "All" view can show
     // the full seeded universe (hundreds of companies) organised by revenue
