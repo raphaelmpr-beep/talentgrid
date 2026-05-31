@@ -41,6 +41,9 @@ type RefreshCompanyReport = {
   // the number the company's live careers site shows; it can exceed
   // careers_portal_jobs because the stored/extracted set is capped.
   careers_portal_total: number;
+  // True when the ATS board was inferred from a legacy company's existing role
+  // URLs (no stored careers metadata). Surfaces the repair path in the report.
+  careers_portal_inferred?: boolean;
   // Resolved source path: "greenhouse" | "lever" | "html" | "json".
   careers_portal_source?: string;
   careers_portal_reason?: string;
@@ -123,6 +126,84 @@ function careersUrlsFor(company: MonitoredCompany): {
   };
 }
 
+// ATS hints inferred from a legacy company's existing role URLs when its
+// metadata carries no careers/ATS pointers. The careers-portal provider can
+// then resolve a public board (e.g. Greenhouse via gh_jid + name-guess) and
+// report the authoritative live total.
+type InferredAtsHints = {
+  careersUrl: string | null;
+  jobPortalUrl: string | null;
+  atsType: string | null;
+  atsSlug: string | null;
+};
+
+// Recognised ATS host fragments and the slug position in their URL path. Used
+// to derive an explicit board slug straight from a stored role URL, which is
+// more reliable than name-guessing.
+function atsHintsFromRoleUrl(url: string): InferredAtsHints | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = parsed.hostname.toLowerCase();
+  const parts = parsed.pathname.split("/").filter(Boolean);
+
+  if (host.endsWith("greenhouse.io")) {
+    const boardsIdx = parts.indexOf("boards");
+    const slug = boardsIdx >= 0 ? parts[boardsIdx + 1] : parts[0];
+    if (slug) {
+      return { careersUrl: url, jobPortalUrl: url, atsType: "greenhouse", atsSlug: slug };
+    }
+  }
+  if (host.endsWith("lever.co")) {
+    const idx = parts.indexOf("postings");
+    const slug = idx >= 0 ? parts[idx + 1] : parts.find((p) => p !== "v0");
+    if (slug) {
+      return { careersUrl: url, jobPortalUrl: url, atsType: "lever", atsSlug: slug };
+    }
+  }
+  // A company-hosted careers page that embeds Greenhouse leaks a gh_jid marker.
+  // We can't read the slug from it, but handing the URL to the provider lets its
+  // name-guess + board-verify path resolve the board (e.g. pinterestcareers.com
+  // → board "pinterest").
+  if (parsed.search.toLowerCase().includes("gh_jid=") || url.toLowerCase().includes("gh_jid=")) {
+    return { careersUrl: url, jobPortalUrl: url, atsType: null, atsSlug: null };
+  }
+  return null;
+}
+
+// For a targeted legacy company with no stored careers metadata, look at its
+// existing role URLs to infer a public ATS board. Returns null when nothing
+// usable is found. Best-effort and non-fatal.
+async function inferAtsHintsFromRoles(
+  supabase: NonNullable<ReturnType<typeof createFeedAdminClient>>,
+  companyId: string
+): Promise<InferredAtsHints | null> {
+  const { data, error } = await supabase
+    .from("roles")
+    .select("url")
+    .eq("company_id", companyId)
+    .not("url", "is", null)
+    .limit(50);
+  if (error || !data) return null;
+  const urls = (data as Array<{ url: string | null }>)
+    .map((r) => r.url)
+    .filter((u): u is string => typeof u === "string" && u.trim().length > 0);
+
+  // Prefer a URL that yields an explicit board slug; fall back to a gh_jid-only
+  // marker URL (provider resolves the slug by name-guess).
+  let markerFallback: InferredAtsHints | null = null;
+  for (const url of urls) {
+    const hints = atsHintsFromRoleUrl(url);
+    if (!hints) continue;
+    if (hints.atsSlug) return hints;
+    if (!markerFallback) markerFallback = hints;
+  }
+  return markerFallback;
+}
+
 // Map a careers-portal job into the same role row shape used for TheirStack,
 // so the upsert path is identical. external_id is stable across runs.
 function mapCareersPortalJobToRole(job: CareersPortalJob) {
@@ -169,6 +250,14 @@ function targetSlug(query: RefreshJobsQuery): string | null {
   return query.atsSlug ?? query.slug ?? null;
 }
 
+// True when the caller is targeting a single company by id/name/slug. Targeted
+// requests are allowed to reach non-monitored legacy rows (for repair/testing);
+// an untargeted request stays monitored-only so the scheduled cron only ever
+// processes the curated universe.
+function isSingleCompanyTargeted(query: RefreshJobsQuery): boolean {
+  return Boolean(query.companyId || query.companyName || targetSlug(query));
+}
+
 // Minimal view of the PostgREST filter builder. Decoupling from Supabase's
 // fully-recursive generic type here keeps `applyMonitorFilters` from triggering
 // "Type instantiation is excessively deep" on the chained count/page queries.
@@ -178,12 +267,17 @@ interface MonitorFilterBuilder {
 }
 
 // Apply the monitor + single-company targeting filters shared by the count and
-// page queries so both requests stay in sync.
+// page queries so both requests stay in sync. The monitor=true constraint is
+// dropped when the caller targets a single company (so legacy non-monitored
+// rows can be repaired/tested) — untargeted requests stay monitored-only so the
+// scheduled cron never fans out across the whole table.
 function applyMonitorFilters(
   builder: MonitorFilterBuilder,
   query: RefreshJobsQuery
 ): MonitorFilterBuilder {
-  let b = builder.eq("monitor", true);
+  const targeted = isSingleCompanyTargeted(query);
+  let b = builder;
+  if (!targeted) b = b.eq("monitor", true);
   if (query.companyId) b = b.eq("id", query.companyId);
   if (query.companyName) b = b.ilike("name", query.companyName);
   const slug = targetSlug(query);
@@ -278,17 +372,37 @@ async function refreshCompany(
     errors: [],
   };
 
-  const { careersUrl, jobPortalUrl, atsType, atsSlug } = careersUrlsFor(company);
+  let { careersUrl, jobPortalUrl, atsType, atsSlug } = careersUrlsFor(company);
+
+  // Legacy rows imported before the curated universe carry an empty metadata
+  // object, so they have no careers/ATS pointers. When targeting such a company
+  // for repair, infer a public ATS board from its existing role URLs (e.g.
+  // Pinterest's gh_jid links) so the careers-portal provider can report the
+  // authoritative live total instead of the stale 0-2 legacy rows.
+  if (supabase && !atsType && !atsSlug && !careersUrl && !jobPortalUrl) {
+    const inferred = await inferAtsHintsFromRoles(supabase, company.id);
+    if (inferred) {
+      careersUrl = inferred.careersUrl;
+      jobPortalUrl = inferred.jobPortalUrl;
+      atsType = inferred.atsType;
+      atsSlug = inferred.atsSlug;
+      report.careers_portal_inferred = true;
+    }
+  }
+
   const lowCoverage = theirStackJobs.length <= LOW_COVERAGE_THRESHOLD;
   const hasAtsBoard = Boolean(atsType && atsSlug);
   const hasCareersUrl = Boolean(careersUrl || jobPortalUrl);
 
   // Direct careers-portal source. Always attempt when a public ATS board is
   // resolvable (it yields the authoritative full-inventory total cheaply via a
-  // single JSON request) or when TheirStack is thin and the company has any
-  // careers/ATS URL. No API key required.
+  // single JSON request), when TheirStack is thin and the company has any
+  // careers/ATS URL, or when we inferred hints from a legacy row's role URLs
+  // (the whole point of a targeted repair). No API key required.
+  const inferredAttempt = report.careers_portal_inferred === true && hasCareersUrl;
   let careersJobs: CareersPortalJob[] = [];
-  if ((hasAtsBoard || hasCareersUrl) && (hasAtsBoard || lowCoverage)) {
+  let resolvedCareersUrl: string | null = null;
+  if ((hasAtsBoard || hasCareersUrl) && (hasAtsBoard || lowCoverage || inferredAttempt)) {
     report.careers_portal_attempted = true;
     try {
       const portal = await fetchCareersPortalJobs({
@@ -303,6 +417,7 @@ async function refreshCompany(
       report.careers_portal_jobs = portal.jobs.length;
       report.careers_portal_total = portal.totalCount;
       report.careers_portal_source = portal.source;
+      resolvedCareersUrl = portal.fetchedUrl ?? careersUrl ?? jobPortalUrl;
       if (portal.jobs.length === 0 && portal.reason) {
         report.careers_portal_reason = portal.reason;
       }
@@ -422,25 +537,40 @@ async function refreshCompany(
   // on every page load. Only written when the careers source was actually
   // exercised this run.
   if (report.careers_portal_attempted && report.careers_portal_total > 0) {
-    await persistSourceTotal(supabase, company, report);
+    await persistSourceTotal(supabase, company, report, {
+      careersUrl: resolvedCareersUrl,
+      atsType,
+      atsSlug,
+    });
   }
 
   return report;
 }
 
 // Merge the live source inventory total into companies.metadata. Non-fatal:
-// failures are recorded as warnings and never abort the batch.
+// failures are recorded as warnings and never abort the batch. When the ATS
+// board was inferred for a legacy row, the resolved careers URL + ATS hints are
+// persisted too so subsequent runs skip re-inference.
 async function persistSourceTotal(
   supabase: NonNullable<ReturnType<typeof createFeedAdminClient>>,
   company: MonitoredCompany,
-  report: RefreshCompanyReport
+  report: RefreshCompanyReport,
+  resolved: { careersUrl: string | null; atsType: string | null; atsSlug: string | null }
 ): Promise<void> {
-  const metadata = {
-    ...(company.metadata ?? {}),
+  const prior = company.metadata ?? {};
+  const metadata: Record<string, unknown> = {
+    ...prior,
     source_openings_total: report.careers_portal_total,
     source_openings_source: report.careers_portal_source ?? "careers_portal",
     source_openings_checked_at: new Date().toISOString(),
   };
+  // Backfill inferred careers/ATS pointers onto a legacy row so future loads and
+  // the scheduled cron can resolve the board without re-inferring. Never clobber
+  // an existing value.
+  if (resolved.careersUrl && !prior.careers_url) metadata.careers_url = resolved.careersUrl;
+  if (resolved.atsType && !prior.ats_type) metadata.ats_type = resolved.atsType;
+  if (resolved.atsSlug && !prior.ats_slug) metadata.ats_slug = resolved.atsSlug;
+
   const { error } = await supabase
     .from("companies")
     .update({ metadata, is_hiring: report.careers_portal_total > 0 })
@@ -623,9 +753,12 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   report.next_offset = report.has_more ? query.offset + query.limit : null;
 
   if (monitored.length === 0) {
+    const targeted = isSingleCompanyTargeted(query);
     report.errors.push(
       total === 0
-        ? "no monitored companies match the requested filters (set companies.monitor = true to enrol)"
+        ? targeted
+          ? "no company matches the requested filters (check companyId/companyName/slug)"
+          : "no monitored companies match the requested filters (set companies.monitor = true to enrol)"
         : "offset is beyond the matching set; nothing to process in this window"
     );
     return NextResponse.json(report);

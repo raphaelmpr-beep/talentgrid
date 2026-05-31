@@ -1242,6 +1242,83 @@ function buildZeroOpeningCompany(company: CompanyRow): ValidatedCompany {
   } as ValidatedCompany;
 }
 
+// Count populated metadata keys as a coarse "richness" signal used only as a
+// tiebreaker when picking which of several same-named rows to surface.
+function metadataRichness(metadata: Record<string, unknown> | null | undefined): number {
+  if (!metadata) return 0;
+  return Object.values(metadata).filter(
+    (v) => v !== null && v !== undefined && v !== ""
+  ).length;
+}
+
+// Merge company entries that share a normalised name so a stale legacy row can
+// never out-rank a source-backed/monitored duplicate. The winner is the row
+// with the highest persisted source_openings_total, then the richest metadata,
+// then the most matching openings. The merged card keeps the largest
+// active_openings_total and the union of matching jobs so no real openings are
+// dropped, and zero-opening companies are preserved (a single name yields a
+// single card, never hidden).
+function dedupeByName(companies: ValidatedCompany[]): ValidatedCompany[] {
+  const groups = new Map<string, ValidatedCompany[]>();
+  const order: string[] = [];
+  for (const company of companies) {
+    const key = normalizeKeyPart(company.name);
+    if (!groups.has(key)) {
+      groups.set(key, []);
+      order.push(key);
+    }
+    groups.get(key)!.push(company);
+  }
+
+  const score = (c: ValidatedCompany): [number, number, number] => [
+    getSourceOpeningsTotal(c.metadata) ?? -1,
+    metadataRichness(c.metadata),
+    c.active_openings_matching_filters ?? c.jobCount ?? 0,
+  ];
+
+  const result: ValidatedCompany[] = [];
+  for (const key of order) {
+    const members = groups.get(key)!;
+    if (members.length === 1) {
+      result.push(members[0]);
+      continue;
+    }
+    const winner = members.reduce((best, current) => {
+      const [bs, bm, bj] = score(best);
+      const [cs, cm, cj] = score(current);
+      if (cs !== bs) return cs > bs ? current : best;
+      if (cm !== bm) return cm > bm ? current : best;
+      return cj > bj ? current : best;
+    });
+    // Keep the largest known total and the richest matching set across the
+    // duplicates so merging never lowers a count or drops openings.
+    const mergedMatching = members.reduce(
+      (max, c) => Math.max(max, c.active_openings_matching_filters ?? c.jobCount ?? 0),
+      0
+    );
+    const mergedTotal = members.reduce(
+      (max, c) => Math.max(max, c.active_openings_total ?? 0),
+      0
+    );
+    const mostJobs = members.reduce(
+      (best, c) => (c.jobs.length > best.jobs.length ? c : best),
+      winner
+    );
+    result.push({
+      ...winner,
+      jobs: mostJobs.jobs,
+      roles: mostJobs.roles,
+      rolesSummary: mostJobs.rolesSummary,
+      top_roles: winner.top_roles ?? mostJobs.top_roles,
+      jobCount: mostJobs.jobs.length,
+      open_roles_count: mostJobs.jobs.length,
+      active_openings_matching_filters: mergedMatching,
+      active_openings_total: Math.max(mergedTotal, mergedMatching),
+    });
+  }
+  return result;
+}
+
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
   const debug = req.nextUrl.searchParams.get("debug") === "true";
@@ -1573,14 +1650,20 @@ export async function GET(req: NextRequest) {
   // here — zero-opening companies have no roles to match, so we only surface
   // them when the caller isn't actively searching for specific openings.
   const annotated = (() => {
-    if (!includeZeroOpenings) return withOpenings;
-    const present = new Set(withOpenings.map((c) => c.id));
-    const isSearchScoped = Boolean(freeText || effectiveDomain || effectiveRole);
-    if (isSearchScoped) return withOpenings;
-    const zeros = revenueScopedCompanies
-      .filter((company) => !present.has(company.id))
-      .map((company) => buildZeroOpeningCompany(company));
-    return [...withOpenings, ...zeros];
+    const base = (() => {
+      if (!includeZeroOpenings) return withOpenings;
+      const present = new Set(withOpenings.map((c) => c.id));
+      const isSearchScoped = Boolean(freeText || effectiveDomain || effectiveRole);
+      if (isSearchScoped) return withOpenings;
+      const zeros = revenueScopedCompanies
+        .filter((company) => !present.has(company.id))
+        .map((company) => buildZeroOpeningCompany(company));
+      return [...withOpenings, ...zeros];
+    })();
+    // Collapse same-named duplicates (e.g. a stale legacy row alongside a
+    // source-backed monitored row) so the stale low count can't win or appear
+    // as a second card.
+    return dedupeByName(base);
   })();
   console.log("Companies returned:", annotated.length);
 
