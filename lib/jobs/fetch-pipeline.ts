@@ -31,6 +31,12 @@ import {
   classifyRoleCategory,
   classifyDomainCategory,
 } from "@/lib/feeds/classify";
+import {
+  normalizeCompensation,
+  normalizePostedDate,
+  compensationStatusRank,
+  type CompensationStatus,
+} from "@/lib/jobs/compensation";
 
 type SupabaseAdmin = NonNullable<
   ReturnType<typeof import("@/lib/feeds/supabase-admin").createFeedAdminClient>
@@ -62,8 +68,31 @@ export type FetchCompanyResult = {
   // The source's exact live total when the vendor API reported one.
   source_total: number;
   source_count_exact: boolean;
+  // Parser summary for the compensation/date feature: how many upserted jobs
+  // carried a usable compensation value and an exact posting date.
+  jobs_with_compensation: number;
+  jobs_without_compensation: number;
+  jobs_with_posted_at: number;
+  jobs_without_posted_at: number;
+  // A few representative parser results for debugging (bounded), so an operator
+  // can eyeball what the normalizers extracted without a DB round-trip.
+  parser_samples: ParserSample[];
   error: string | null;
 };
+
+// One compact parser result, surfaced in fetch responses for debugging.
+export type ParserSample = {
+  title: string;
+  ats_vendor: string | null;
+  compensation_status: string;
+  compensation_min: number | null;
+  compensation_max: number | null;
+  compensation_text: string | null;
+  posted_status: string;
+  posted_at: string | null;
+};
+
+const MAX_PARSER_SAMPLES = 5;
 
 // Vendors whose source we actively fetch. A careers_url-only source (no vendor)
 // is informational and never produces an exact job count — it is skipped here.
@@ -190,6 +219,11 @@ export async function fetchCompanyJobs(
     deactivated_count: 0,
     source_total: 0,
     source_count_exact: false,
+    jobs_with_compensation: 0,
+    jobs_without_compensation: 0,
+    jobs_with_posted_at: 0,
+    jobs_without_posted_at: 0,
+    parser_samples: [],
     error: null,
   };
 
@@ -234,10 +268,51 @@ export async function fetchCompanyJobs(
   const seenExternalIds: string[] = [];
   const now = new Date().toISOString();
 
+  // Load the existing compensation precision for this company's rows so a run
+  // that comes back with a poorer (or unavailable) compensation never clobbers a
+  // richer value already stored. Keyed by external_id. Best-effort: on read
+  // failure we simply skip preservation (treat all as new).
+  const priorComp = await loadPriorCompensation(supabase, company.id);
+
   for (const job of jobs) {
     const externalId = externalIdFromJob(job);
     const roleCategory = classifyRoleCategory(job.title, null);
     const domainCategory = classifyDomainCategory(job.title, null, companyContext);
+
+    // Normalize what the source provided. The vendor tag from the board parser
+    // is preferred; fall back to the source row's configured source_name.
+    const vendor = job.ats_vendor ?? source.source_name ?? null;
+    const comp = normalizeCompensation(job.raw, vendor);
+    const posted = normalizePostedDate(job.raw, vendor);
+
+    // Posting date: use the source's exact date when present; otherwise infer
+    // from when we first discovered the posting and label it as inferred — never
+    // present an inferred date as if it were the source's posting date.
+    const postedAt = posted.posted_at ?? now;
+    const postedStatus =
+      posted.posted_status === "exact" ? "exact" : "inferred_from_discovered_at";
+
+    // Safe preservation: if a prior row already holds a stronger compensation
+    // status than this run produced, keep the stored value and don't overwrite
+    // it with a weaker/unavailable one. We only need to guard the compensation
+    // columns; everything else is freshly authoritative each run.
+    const prior = priorComp.get(externalId);
+    const preserve =
+      prior !== undefined &&
+      compensationStatusRank(prior) > compensationStatusRank(comp.compensation_status);
+
+    const compFields = preserve
+      ? {}
+      : {
+          compensation_min: comp.compensation_min,
+          compensation_max: comp.compensation_max,
+          compensation_currency: comp.compensation_currency,
+          compensation_period: comp.compensation_period,
+          compensation_text: comp.compensation_text,
+          compensation_source: comp.compensation_source,
+          compensation_status: comp.compensation_status,
+        };
+
     const { error } = await supabase.from("roles").upsert(
       {
         external_id: externalId,
@@ -249,11 +324,18 @@ export async function fetchCompanyJobs(
         role_category: roleCategory,
         domain_category: domainCategory,
         is_active: true,
+        ...compFields,
+        posted_at: postedAt,
+        posted_status: postedStatus,
+        last_seen_at: now,
         last_checked_at: now,
         metadata: {
           external_id: externalId,
           source_url: job.source_url,
           source_name: source.source_name,
+          ats_vendor: job.ats_vendor ?? null,
+          // Preserve the untouched vendor object for later parser improvements.
+          raw_data: job.raw ?? null,
         },
       },
       { onConflict: "company_id,external_id" }
@@ -264,6 +346,27 @@ export async function fetchCompanyJobs(
     }
     result.upserted_count += 1;
     seenExternalIds.push(externalId);
+
+    // Parser summary. Count the effective stored status (preserved prior counts
+    // as having compensation), and the posting-date precision for this run.
+    const effectiveStatus: CompensationStatus = preserve ? prior! : comp.compensation_status;
+    if (effectiveStatus !== "unavailable") result.jobs_with_compensation += 1;
+    else result.jobs_without_compensation += 1;
+    if (posted.posted_status === "exact") result.jobs_with_posted_at += 1;
+    else result.jobs_without_posted_at += 1;
+
+    if (result.parser_samples.length < MAX_PARSER_SAMPLES) {
+      result.parser_samples.push({
+        title: job.title,
+        ats_vendor: job.ats_vendor ?? null,
+        compensation_status: comp.compensation_status,
+        compensation_min: comp.compensation_min,
+        compensation_max: comp.compensation_max,
+        compensation_text: comp.compensation_text,
+        posted_status: posted.posted_status,
+        posted_at: posted.posted_at,
+      });
+    }
   }
 
   // Deactivate previously-active careers_portal rows for this company that were
@@ -300,6 +403,32 @@ export async function fetchCompanyJobs(
   }
 
   return result;
+}
+
+// Load the stored compensation_status per external_id for a company's active
+// careers_portal rows, so the upsert loop can avoid overwriting a richer stored
+// value with a poorer one from this run. Best-effort: returns an empty map on
+// any read failure (preservation then simply doesn't kick in).
+async function loadPriorCompensation(
+  supabase: SupabaseAdmin,
+  companyId: string
+): Promise<Map<string, CompensationStatus>> {
+  const map = new Map<string, CompensationStatus>();
+  const { data, error } = await supabase
+    .from("roles")
+    .select("external_id,compensation_status")
+    .eq("company_id", companyId)
+    .eq("source", "careers_portal");
+  if (error || !data) return map;
+  for (const row of data as Array<{
+    external_id: string | null;
+    compensation_status: string | null;
+  }>) {
+    if (!row.external_id) continue;
+    const status = (row.compensation_status ?? "unavailable") as CompensationStatus;
+    map.set(row.external_id, status);
+  }
+  return map;
 }
 
 async function deactivateUnseen(

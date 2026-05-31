@@ -58,6 +58,10 @@ export async function POST(req: NextRequest) {
   let companiesFailed = 0;
   let jobsFetched = 0;
   let jobsUpserted = 0;
+  let jobsWithCompensation = 0;
+  let jobsWithoutCompensation = 0;
+  let jobsWithPostedAt = 0;
+  let jobsWithoutPostedAt = 0;
   const errors: Array<{ company_id: string; company_name: string; error: string }> =
     [];
   const results = [];
@@ -69,6 +73,10 @@ export async function POST(req: NextRequest) {
     });
     jobsFetched += result.fetched_count;
     jobsUpserted += result.upserted_count;
+    jobsWithCompensation += result.jobs_with_compensation;
+    jobsWithoutCompensation += result.jobs_without_compensation;
+    jobsWithPostedAt += result.jobs_with_posted_at;
+    jobsWithoutPostedAt += result.jobs_without_posted_at;
     if (result.error) {
       companiesFailed += 1;
       errors.push({
@@ -86,6 +94,10 @@ export async function POST(req: NextRequest) {
       fetched_count: result.fetched_count,
       upserted_count: result.upserted_count,
       deactivated_count: result.deactivated_count,
+      jobs_with_compensation: result.jobs_with_compensation,
+      jobs_without_compensation: result.jobs_without_compensation,
+      jobs_with_posted_at: result.jobs_with_posted_at,
+      jobs_without_posted_at: result.jobs_without_posted_at,
       error: result.error,
     });
   }
@@ -96,6 +108,11 @@ export async function POST(req: NextRequest) {
     companies_failed: companiesFailed,
     jobs_fetched: jobsFetched,
     jobs_upserted: jobsUpserted,
+    // Aggregate compensation/date parser summary across all companies.
+    jobs_with_compensation: jobsWithCompensation,
+    jobs_without_compensation: jobsWithoutCompensation,
+    jobs_with_posted_at: jobsWithPostedAt,
+    jobs_without_posted_at: jobsWithoutPostedAt,
     dry_run: dryRun,
     errors,
     results,

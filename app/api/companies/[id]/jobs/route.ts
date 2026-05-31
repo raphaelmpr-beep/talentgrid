@@ -27,9 +27,19 @@ type RoleRow = {
   seniority?: string | null;
   salary_min?: number | null;
   salary_max?: number | null;
+  compensation_min?: number | null;
+  compensation_max?: number | null;
+  compensation_currency?: string | null;
+  compensation_period?: string | null;
+  compensation_text?: string | null;
+  compensation_source?: string | null;
+  compensation_status?: string | null;
   url?: string | null;
   ghost_score?: number | null;
   posted_at?: string | null;
+  posted_status?: string | null;
+  discovered_at?: string | null;
+  last_seen_at?: string | null;
   created_at?: string | null;
   role_category?: string | null;
   domain_category?: string | null;
@@ -124,7 +134,7 @@ export async function GET(
   const { data, error } = await supabase
     .from("roles")
     .select(
-      "id,company_id,external_id,source,title,description,location,remote,employment_type,seniority,salary_min,salary_max,url,ghost_score,posted_at,created_at,role_category,domain_category,metadata"
+      "id,company_id,external_id,source,title,description,location,remote,employment_type,seniority,salary_min,salary_max,compensation_min,compensation_max,compensation_currency,compensation_period,compensation_text,compensation_source,compensation_status,url,ghost_score,posted_at,posted_status,discovered_at,last_seen_at,created_at,role_category,domain_category,metadata"
     )
     .eq("company_id", id)
     .eq("is_active", true)
@@ -186,11 +196,29 @@ export async function GET(
       seniority: role.seniority,
       salary_min: role.salary_min,
       salary_max: role.salary_max,
+      // Compensation captured from the source (never guessed). status/source
+      // tell the client how precise the value is and where it came from.
+      compensation_min: role.compensation_min ?? null,
+      compensation_max: role.compensation_max ?? null,
+      compensation_currency: role.compensation_currency ?? null,
+      compensation_period: role.compensation_period ?? null,
+      compensation_text: role.compensation_text ?? null,
+      compensation_source: role.compensation_source ?? null,
+      compensation_status: role.compensation_status ?? "unavailable",
       url: role.url,
       ghost_score: role.ghost_score,
       posted_at: role.posted_at,
+      posted_status: role.posted_status ?? "unavailable",
+      discovered_at: role.discovered_at ?? null,
+      last_seen_at: role.last_seen_at ?? null,
       role_category: resolveRoleCategory(role),
       domain_category: resolveDomainCategory(role),
+      // Debug visibility: the raw vendor fields the parsers read, surfaced so an
+      // operator can see why a status landed where it did.
+      debug: {
+        ats_vendor: (role.metadata?.["ats_vendor"] as string | null) ?? null,
+        raw_data: role.metadata?.["raw_data"] ?? null,
+      },
     })),
   });
 }

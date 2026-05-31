@@ -34,10 +34,20 @@ type RoleRow = {
   seniority?: string | null;
   salary_min?: number | null;
   salary_max?: number | null;
+  compensation_min?: number | string | null;
+  compensation_max?: number | string | null;
+  compensation_currency?: string | null;
+  compensation_period?: string | null;
+  compensation_text?: string | null;
+  compensation_source?: string | null;
+  compensation_status?: string | null;
   url?: string | null;
   is_active: boolean;
   ghost_score: number;
   posted_at?: string | null;
+  posted_status?: string | null;
+  discovered_at?: string | null;
+  last_seen_at?: string | null;
   metadata?: Record<string, unknown> | null;
 };
 

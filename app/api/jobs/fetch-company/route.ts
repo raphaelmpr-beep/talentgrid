@@ -87,6 +87,12 @@ export async function POST(req: NextRequest) {
     deactivated_count: result.deactivated_count,
     source_total: result.source_total,
     source_count_exact: result.source_count_exact,
+    // Compensation/date parser summary for this run.
+    jobs_with_compensation: result.jobs_with_compensation,
+    jobs_without_compensation: result.jobs_without_compensation,
+    jobs_with_posted_at: result.jobs_with_posted_at,
+    jobs_without_posted_at: result.jobs_without_posted_at,
+    parser_samples: result.parser_samples,
     dry_run: dryRun,
     error: result.error,
   });

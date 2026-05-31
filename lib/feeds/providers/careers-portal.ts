@@ -27,6 +27,15 @@ export type CareersPortalJob = {
   location: string | null;
   source: "careers_portal";
   source_url: string;
+  // The vendor whose board produced this job ("greenhouse" | "lever" | "ashby"
+  // | "workday" | "html" | "json" | named-employer label). Lets downstream
+  // normalizers (compensation, posting date) pick the right field mapping.
+  ats_vendor?: string;
+  // The untouched vendor job object as returned by the board API. Preserved so
+  // the compensation/date normalizers can read structured fields and so the
+  // pipeline can persist raw_data for later parser improvements. Omitted for
+  // HTML/anchor scrapes where there is no structured source object.
+  raw?: Record<string, unknown>;
 };
 
 export type CareersPortalInput = {
@@ -716,6 +725,8 @@ function parseGreenhouseBoard(
       location: loc,
       source: "careers_portal",
       source_url: board.baseUrl,
+      ats_vendor: "greenhouse",
+      raw: item,
     });
     if (jobs.length >= maxJobs) break;
   }
@@ -757,6 +768,8 @@ function parseLeverBoard(
       location: loc,
       source: "careers_portal",
       source_url: board.baseUrl,
+      ats_vendor: "lever",
+      raw: item,
     });
     if (jobs.length >= maxJobs) break;
   }
@@ -802,6 +815,8 @@ function parseAshbyBoard(
       location: loc,
       source: "careers_portal",
       source_url: board.baseUrl,
+      ats_vendor: "ashby",
+      raw: item,
     });
     if (jobs.length >= maxJobs) break;
   }
@@ -888,6 +903,8 @@ async function fetchWorkdayBoard(
           location: loc,
           source: "careers_portal",
           source_url: board.baseUrl,
+          ats_vendor: "workday",
+          raw: item as Record<string, unknown>,
         });
       }
     }
@@ -992,6 +1009,8 @@ async function fetchAmazonBoard(
       location: pickStr(item, ["normalized_location", "location", "city"]) ?? null,
       source: "careers_portal",
       source_url: "https://www.amazon.jobs",
+      ats_vendor: "amazon",
+      raw: item,
     });
     if (jobs.length >= maxJobs) break;
   }
@@ -1046,6 +1065,8 @@ async function fetchMicrosoftBoard(
       location: loc,
       source: "careers_portal",
       source_url: "https://jobs.careers.microsoft.com",
+      ats_vendor: "microsoft",
+      raw: item,
     });
     if (jobs.length >= maxJobs) break;
   }
@@ -1112,6 +1133,8 @@ async function fetchAppleBoard(
       location: loc,
       source: "careers_portal",
       source_url: "https://jobs.apple.com",
+      ats_vendor: "apple",
+      raw: item,
     });
     if (jobs.length >= maxJobs) break;
   }

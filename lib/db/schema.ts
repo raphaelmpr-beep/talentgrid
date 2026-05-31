@@ -58,6 +58,15 @@ export const roles = pgTable(
     seniority: text("seniority"),
     salaryMin: integer("salary_min"),
     salaryMax: integer("salary_max"),
+    // Compensation captured from an ATS/API source (numeric, never guessed).
+    // See supabase/migrations/006_role_compensation_and_dates.sql.
+    compensationMin: numeric("compensation_min"),
+    compensationMax: numeric("compensation_max"),
+    compensationCurrency: text("compensation_currency").default("USD"),
+    compensationPeriod: text("compensation_period"),
+    compensationText: text("compensation_text"),
+    compensationSource: text("compensation_source"),
+    compensationStatus: text("compensation_status").notNull().default("unavailable"),
     url: text("url"),
     source: text("source"),
     roleCategory: text("role_category"),
@@ -65,6 +74,9 @@ export const roles = pgTable(
     isActive: boolean("is_active").notNull().default(true),
     ghostScore: integer("ghost_score").notNull().default(0),
     postedAt: timestamp("posted_at", { withTimezone: true }),
+    postedStatus: text("posted_status").notNull().default("unavailable"),
+    discoveredAt: timestamp("discovered_at", { withTimezone: true }).notNull().defaultNow(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
     lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),
     metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -79,6 +91,22 @@ export const roles = pgTable(
     companyExternalIdUq: uniqueIndex("roles_company_external_id_uq").on(
       t.companyId,
       t.externalId
+    ),
+    compensationPeriodCheck: check(
+      "roles_compensation_period_check",
+      sql`${t.compensationPeriod} is null or ${t.compensationPeriod} in ('year','hour','month','week','contract','unknown')`
+    ),
+    compensationSourceCheck: check(
+      "roles_compensation_source_check",
+      sql`${t.compensationSource} is null or ${t.compensationSource} in ('ats_api','job_description_parsed','unavailable')`
+    ),
+    compensationStatusCheck: check(
+      "roles_compensation_status_check",
+      sql`${t.compensationStatus} in ('exact_range','exact_single_value','text_only','parsed_from_description','unavailable')`
+    ),
+    postedStatusCheck: check(
+      "roles_posted_status_check",
+      sql`${t.postedStatus} in ('exact','inferred_from_discovered_at','unavailable')`
     ),
   })
 );

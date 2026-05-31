@@ -16,9 +16,21 @@ export type RoleRow = {
   seniority?: string | null;
   salary_min?: number | null;
   salary_max?: number | null;
+  // Compensation captured from an ATS/API source (numeric columns may arrive as
+  // strings from postgres). status/period drive how the cell is rendered.
+  compensation_min?: number | string | null;
+  compensation_max?: number | string | null;
+  compensation_currency?: string | null;
+  compensation_period?: string | null;
+  compensation_text?: string | null;
+  compensation_source?: string | null;
+  compensation_status?: string | null;
   url?: string | null;
   ghost_score?: number;
   posted_at?: string | null;
+  posted_status?: string | null;
+  discovered_at?: string | null;
+  last_seen_at?: string | null;
   metadata?: Record<string, unknown> | null;
 };
 
@@ -54,17 +66,123 @@ function ghostBadge(score: number | undefined): React.ReactNode {
   return <Badge variant="danger">Ghost</Badge>;
 }
 
-function salaryLabel(role: RoleRow): string | null {
-  if (!role.salary_min && !role.salary_max) return null;
-  const fmt = (n: number) =>
-    new Intl.NumberFormat("en", {
-      notation: "compact",
-      maximumFractionDigits: 1,
-    }).format(n);
-  if (role.salary_min && role.salary_max)
-    return `$${fmt(role.salary_min)}–${fmt(role.salary_max)}`;
-  if (role.salary_min) return `$${fmt(role.salary_min)}+`;
-  return `up to $${fmt(role.salary_max!)}`;
+function toNum(v: number | string | null | undefined): number | null {
+  if (v === null || v === undefined) return null;
+  const n = typeof v === "number" ? v : Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+const CURRENCY_SYMBOL: Record<string, string> = {
+  USD: "$",
+  EUR: "€",
+  GBP: "£",
+};
+
+const PERIOD_LABEL: Record<string, string> = {
+  year: "year",
+  hour: "hour",
+  month: "month",
+  week: "week",
+  contract: "contract",
+};
+
+function moneyAmount(n: number, currency: string | null | undefined): string {
+  const sym = currency ? CURRENCY_SYMBOL[currency] : undefined;
+  const formatted = new Intl.NumberFormat("en", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(n);
+  if (sym) return `${sym}${formatted}`;
+  // No known symbol: show the ISO code suffix so the figure is unambiguous.
+  return currency ? `${formatted} ${currency}` : `${formatted}`;
+}
+
+function periodSuffix(period: string | null | undefined): string {
+  const label = period ? PERIOD_LABEL[period] : undefined;
+  return label ? ` / ${label}` : "";
+}
+
+// Resolve how the Compensation cell should render, driven by compensation_status.
+// Returns the display text plus whether to show a small "parsed" tag. Returns
+// null only when there is genuinely nothing to show (unavailable / no status),
+// in which case the caller renders an em dash. Never fabricates a value.
+function compensationDisplay(
+  role: RoleRow
+): { text: string; parsed: boolean } | null {
+  const status = role.compensation_status ?? "unavailable";
+  const min = toNum(role.compensation_min);
+  const max = toNum(role.compensation_max);
+  const currency = role.compensation_currency;
+  const suffix = periodSuffix(role.compensation_period);
+
+  switch (status) {
+    case "exact_range": {
+      if (min !== null && max !== null && min !== max) {
+        return {
+          text: `${moneyAmount(min, currency)}–${moneyAmount(max, currency)}${suffix}`,
+          parsed: false,
+        };
+      }
+      // Fall through defensively to single value if the range collapsed.
+      const single = min ?? max;
+      if (single !== null) {
+        return { text: `${moneyAmount(single, currency)}${suffix}`, parsed: false };
+      }
+      return role.compensation_text
+        ? { text: role.compensation_text, parsed: false }
+        : null;
+    }
+    case "exact_single_value": {
+      const single = min ?? max;
+      if (single !== null) {
+        return { text: `${moneyAmount(single, currency)}${suffix}`, parsed: false };
+      }
+      return role.compensation_text
+        ? { text: role.compensation_text, parsed: false }
+        : null;
+    }
+    case "text_only":
+      return role.compensation_text
+        ? { text: role.compensation_text, parsed: false }
+        : null;
+    case "parsed_from_description":
+      return role.compensation_text
+        ? { text: role.compensation_text, parsed: true }
+        : null;
+    case "unavailable":
+    default:
+      // Legacy rows with no compensation_* but a stored salary_min/max still
+      // render from the older integer columns so nothing regresses.
+      return legacySalary(role);
+  }
+}
+
+// Backwards-compatible rendering for rows that predate compensation_* and only
+// have the integer salary_min/max columns.
+function legacySalary(role: RoleRow): { text: string; parsed: boolean } | null {
+  const min = toNum(role.salary_min);
+  const max = toNum(role.salary_max);
+  if (min === null && max === null) return null;
+  if (min !== null && max !== null)
+    return { text: `${moneyAmount(min, "USD")}–${moneyAmount(max, "USD")}`, parsed: false };
+  if (min !== null) return { text: `${moneyAmount(min, "USD")}+`, parsed: false };
+  return { text: `up to ${moneyAmount(max!, "USD")}`, parsed: false };
+}
+
+// Posted cell: an exact source date renders as a relative "Posted Nd ago"; an
+// inferred-from-discovery date renders as "Discovered Nd ago" (never "Posted",
+// so we don't imply a posting date we don't have); unavailable renders em dash.
+function postedDisplay(role: RoleRow): string {
+  const status = role.posted_status ?? "unavailable";
+  if (status === "exact") {
+    const rel = formatRelative(role.posted_at);
+    return rel ? `Posted ${rel}` : "—";
+  }
+  if (status === "inferred_from_discovered_at") {
+    const rel = formatRelative(role.discovered_at ?? role.posted_at);
+    return rel ? `Discovered ${rel}` : "—";
+  }
+  return "—";
 }
 
 export function RoleTable({ roles, emptyMessage }: RoleTableProps) {
@@ -184,13 +302,26 @@ export function RoleTable({ roles, emptyMessage }: RoleTableProps) {
                   Compensation
                 </dt>
                 <dd className="text-right text-neutral-700">
-                  {salaryLabel(role) ?? "—"}
+                  {(() => {
+                    const comp = compensationDisplay(role);
+                    if (!comp) return "—";
+                    return (
+                      <span>
+                        {comp.text}
+                        {comp.parsed && (
+                          <span className="ml-1 rounded bg-neutral-100 px-1 text-[10px] uppercase tracking-wide text-neutral-500">
+                            parsed
+                          </span>
+                        )}
+                      </span>
+                    );
+                  })()}
                 </dd>
                 <dt className="text-xs uppercase tracking-wide text-neutral-400">
                   Posted
                 </dt>
                 <dd className="text-right text-neutral-500">
-                  {formatRelative(role.posted_at) || "—"}
+                  {postedDisplay(role)}
                 </dd>
               </dl>
 
@@ -270,13 +401,26 @@ export function RoleTable({ roles, emptyMessage }: RoleTableProps) {
                       )}
                     </td>
                     <td className="px-4 py-3 align-top text-neutral-700">
-                      {salaryLabel(role) ?? "—"}
+                      {(() => {
+                        const comp = compensationDisplay(role);
+                        if (!comp) return "—";
+                        return (
+                          <span>
+                            {comp.text}
+                            {comp.parsed && (
+                              <span className="ml-1 rounded bg-neutral-100 px-1 text-[10px] uppercase tracking-wide text-neutral-500">
+                                parsed
+                              </span>
+                            )}
+                          </span>
+                        );
+                      })()}
                     </td>
                     <td className="px-4 py-3 align-top">
                       {ghostBadge(role.ghost_score)}
                     </td>
                     <td className="px-4 py-3 align-top text-neutral-500">
-                      {formatRelative(role.posted_at) || "—"}
+                      {postedDisplay(role)}
                     </td>
                     <td className="px-4 py-3 align-top">
                       <Button
