@@ -32,7 +32,9 @@ export type CareersPortalJob = {
 export type CareersPortalInput = {
   companyName: string;
   companyId?: string;
-  careersUrl: string;
+  // Optional: a named-employer adapter (Amazon/Microsoft/Apple) resolves the
+  // source from companyName alone, so a careers URL is not always required.
+  careersUrl?: string | null;
   jobPortalUrl?: string | null;
   // Optional case-insensitive substring filters. When provided, a job must
   // match at least one role token (in the title) and, if domain tokens are
@@ -840,6 +842,235 @@ async function fetchAtsBoard(
   return parseLeverBoard(fetched.body, board, maxJobs);
 }
 
+// ----------------------------------------------------------------------------
+// Named-employer adapters
+//
+// A handful of mega-employers don't run a standard Greenhouse/Lever/Workday
+// board we can sniff from a URL — they expose their own public, key-less JSON
+// search API that reports the *exact* full inventory (the number the careers
+// site shows). These adapters hit those endpoints directly and report an exact
+// total. They are keyed by normalised company name (so "Amazon" → amazon.jobs).
+// Each is best-effort and non-fatal: any unexpected shape returns null and the
+// caller falls back to the generic ATS/HTML paths (which stay non-exact).
+// ----------------------------------------------------------------------------
+
+type ResolvedFetch = Required<
+  Pick<CareersPortalOptions, "fetch" | "timeoutMs" | "userAgent" | "maxBytes">
+>;
+
+type NamedEmployerResult = {
+  jobs: CareersPortalJob[];
+  total: number;
+  source: string;
+};
+
+// Normalise a company name the same way search-scope does, without importing it
+// here (this module is dependency-free by design): lowercase, punctuation →
+// space, whitespace collapsed.
+function normalizeNameKey(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Amazon — amazon.jobs public search.json. Returns { hits, jobs: [{ title,
+// job_path, normalized_location }] }. `hits` is the exact live inventory for the
+// whole board (Amazon caps it at 10000). We page result_limit to fill the stored
+// sample but the reported total is always `hits`.
+async function fetchAmazonBoard(
+  maxJobs: number,
+  r: ResolvedFetch
+): Promise<NamedEmployerResult | null> {
+  const url = new URL("https://www.amazon.jobs/en/search.json");
+  url.searchParams.set("result_limit", String(Math.min(Math.max(maxJobs, 1), 100)));
+  url.searchParams.set("offset", "0");
+  url.searchParams.set("sort", "recent");
+  const fetched = await fetchBounded(url.toString(), r);
+  if ("reason" in fetched) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fetched.body);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const root = parsed as Record<string, unknown>;
+  const hits = Number(root.hits);
+  if (!Number.isFinite(hits) || hits <= 0) return null;
+  const list = Array.isArray(root.jobs) ? (root.jobs as Array<Record<string, unknown>>) : [];
+  const jobs: CareersPortalJob[] = [];
+  for (const item of list) {
+    const title = pickStr(item, ["title"]);
+    if (!title || title.length < MIN_TITLE_LEN) continue;
+    const path = pickStr(item, ["job_path", "url_next_step"]);
+    const url2 = path ? resolveUrl(path, "https://www.amazon.jobs") : null;
+    jobs.push({
+      external_id: makeExternalId(url2, title),
+      title: title.slice(0, MAX_TITLE_LEN),
+      url: url2,
+      location: pickStr(item, ["normalized_location", "location", "city"]) ?? null,
+      source: "careers_portal",
+      source_url: "https://www.amazon.jobs",
+    });
+    if (jobs.length >= maxJobs) break;
+  }
+  return { jobs, total: Math.floor(hits), source: "amazon" };
+}
+
+// Microsoft — jobs.careers.microsoft.com public search API. Returns
+// { operationResult: { result: { totalJobs, jobs: [{ jobId, title,
+// properties: { primaryLocation } }] } } }. totalJobs is the exact inventory.
+async function fetchMicrosoftBoard(
+  maxJobs: number,
+  r: ResolvedFetch
+): Promise<NamedEmployerResult | null> {
+  const url = new URL("https://gcsservices.careers.microsoft.com/search/api/v1/search");
+  url.searchParams.set("l", "en_us");
+  url.searchParams.set("pg", "1");
+  url.searchParams.set("pgSz", String(Math.min(Math.max(maxJobs, 1), 20)));
+  url.searchParams.set("o", "Relevance");
+  const fetched = await fetchBounded(url.toString(), r);
+  if ("reason" in fetched) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(fetched.body);
+  } catch {
+    return null;
+  }
+  const result =
+    parsed && typeof parsed === "object"
+      ? ((parsed as Record<string, unknown>).operationResult as Record<string, unknown> | undefined)
+          ?.result
+      : undefined;
+  if (!result || typeof result !== "object") return null;
+  const res = result as Record<string, unknown>;
+  const total = Number(res.totalJobs);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const list = Array.isArray(res.jobs) ? (res.jobs as Array<Record<string, unknown>>) : [];
+  const jobs: CareersPortalJob[] = [];
+  for (const item of list) {
+    const title = pickStr(item, ["title"]);
+    if (!title || title.length < MIN_TITLE_LEN) continue;
+    const id = pickStr(item, ["jobId", "id"]);
+    const url2 = id ? `https://jobs.careers.microsoft.com/global/en/job/${id}` : null;
+    let loc: string | null = null;
+    const props = item.properties;
+    if (props && typeof props === "object") {
+      loc = pickStr(props as Record<string, unknown>, ["primaryLocation", "locations"]) ?? null;
+    }
+    jobs.push({
+      external_id: makeExternalId(url2, title),
+      title: title.slice(0, MAX_TITLE_LEN),
+      url: url2,
+      location: loc,
+      source: "careers_portal",
+      source_url: "https://jobs.careers.microsoft.com",
+    });
+    if (jobs.length >= maxJobs) break;
+  }
+  return { jobs, total: Math.floor(total), source: "microsoft" };
+}
+
+// Apple — jobs.apple.com public search API (POST). Returns { totalRecords,
+// searchResults: [{ positionTitle, postingPosition, locations: [{ name }] }] }.
+async function fetchAppleBoard(
+  maxJobs: number,
+  r: ResolvedFetch
+): Promise<NamedEmployerResult | null> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), r.timeoutMs);
+  let bodyText: string;
+  try {
+    const res = await r.fetch("https://jobs.apple.com/api/role/search", {
+      method: "POST",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "user-agent": r.userAgent,
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ query: "", filters: {}, page: 1, locale: "en-us", sort: "newest" }),
+    });
+    if (!res.ok) return null;
+    const raw = await res.text();
+    bodyText = raw.length > r.maxBytes ? raw.slice(0, r.maxBytes) : raw;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const root = parsed as Record<string, unknown>;
+  const total = Number(root.totalRecords);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  const list = Array.isArray(root.searchResults)
+    ? (root.searchResults as Array<Record<string, unknown>>)
+    : [];
+  const jobs: CareersPortalJob[] = [];
+  for (const item of list) {
+    const title = pickStr(item, ["positionTitle", "title"]);
+    if (!title || title.length < MIN_TITLE_LEN) continue;
+    const posId = pickStr(item, ["positionId", "id", "reqId"]);
+    const url2 = posId ? `https://jobs.apple.com/en-us/details/${posId}` : null;
+    let loc: string | null = null;
+    const locs = item.locations;
+    if (Array.isArray(locs) && locs[0] && typeof locs[0] === "object") {
+      loc = pickStr(locs[0] as Record<string, unknown>, ["name", "city"]) ?? null;
+    }
+    jobs.push({
+      external_id: makeExternalId(url2, title),
+      title: title.slice(0, MAX_TITLE_LEN),
+      url: url2,
+      location: loc,
+      source: "careers_portal",
+      source_url: "https://jobs.apple.com",
+    });
+    if (jobs.length >= maxJobs) break;
+  }
+  return { jobs, total: Math.floor(total), source: "apple" };
+}
+
+// Registry of named-employer adapters, keyed by normalised company name and the
+// common aliases TalentGrid stores. Only employers with a stable, public,
+// key-less JSON inventory endpoint are listed — others fall through to the
+// generic ATS/HTML paths (which stay non-exact).
+const NAMED_EMPLOYER_ADAPTERS: Record<
+  string,
+  (maxJobs: number, r: ResolvedFetch) => Promise<NamedEmployerResult | null>
+> = {
+  amazon: fetchAmazonBoard,
+  "amazon com": fetchAmazonBoard,
+  microsoft: fetchMicrosoftBoard,
+  apple: fetchAppleBoard,
+};
+
+function resolveNamedEmployerAdapter(
+  companyName: string
+): ((maxJobs: number, r: ResolvedFetch) => Promise<NamedEmployerResult | null>) | null {
+  const key = normalizeNameKey(companyName);
+  if (NAMED_EMPLOYER_ADAPTERS[key]) return NAMED_EMPLOYER_ADAPTERS[key];
+  // First-word fallback so "Amazon Web Services" still resolves to "amazon".
+  const first = key.split(" ")[0];
+  return NAMED_EMPLOYER_ADAPTERS[first] ?? null;
+}
+
+// True when a named-employer adapter (exact public JSON inventory) exists for the
+// company name. Lets the cron refresh trigger the provider for large employers
+// that have no stored careers URL or ATS hints (e.g. Amazon), since the adapter
+// resolves the source purely by name.
+export function hasNamedEmployerAdapter(companyName: string): boolean {
+  return resolveNamedEmployerAdapter(companyName) !== null;
+}
+
 // Top-level provider entrypoint. Tries jobPortalUrl first (usually the ATS
 // listing page, richer), then careersUrl. Best-effort and non-fatal.
 export async function fetchCareersPortalJobs(
@@ -854,6 +1085,29 @@ export async function fetchCareersPortalJobs(
     maxBytes: options.maxBytes ?? DEFAULT_MAX_BYTES,
   };
   const maxJobs = input.maxJobs && input.maxJobs > 0 ? Math.floor(input.maxJobs) : DEFAULT_MAX_JOBS;
+
+  // Highest priority: a named-employer adapter (Amazon/Microsoft/Apple) backed by
+  // a stable public JSON inventory endpoint. These report the exact live total
+  // for large employers whose careers pages are JS-rendered and not scrapable.
+  const namedAdapter = resolveNamedEmployerAdapter(input.companyName);
+  if (namedAdapter) {
+    const result = await namedAdapter(maxJobs, resolved);
+    if (result && result.total > 0) {
+      const filtered = (input.roleFilters?.length || input.domainFilters?.length)
+        ? result.jobs.filter((j) =>
+            matchesFilters(j.title, input.roleFilters, input.domainFilters)
+          )
+        : result.jobs;
+      return {
+        jobs: filtered,
+        totalCount: result.total,
+        fetchedUrl: null,
+        source: result.source,
+        // A keyless public JSON inventory endpoint reports the exact live total.
+        countExact: true,
+      };
+    }
+  }
 
   // Prefer a public ATS board API when we can resolve one — it returns the full
   // live inventory and an exact total, which is the whole point of this fix.

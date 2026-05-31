@@ -34,6 +34,7 @@ export type {
 
 export {
   fetchCareersPortalJobs,
+  hasNamedEmployerAdapter,
   extractJobsFromHtml,
   extractJobsWithTotal,
 } from "./careers-portal";

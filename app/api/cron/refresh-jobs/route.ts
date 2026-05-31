@@ -4,6 +4,7 @@ import {
   createTheirStackClient,
   mapJobToRole,
   fetchCareersPortalJobs,
+  hasNamedEmployerAdapter,
   TheirStackNotConfiguredError,
   type TheirStackJob,
   type CareersPortalJob,
@@ -17,6 +18,10 @@ import {
   refreshJobsQuerySchema,
   type RefreshJobsQuery,
 } from "@/lib/validators/feed";
+import {
+  normalizeCompanyKey,
+  resolveCompanyNameAliases,
+} from "@/lib/companies/search-scope";
 
 export const runtime = "nodejs";
 // Vercel cron sends GET requests; we also accept POST for manual triggering.
@@ -281,6 +286,31 @@ function isSingleCompanyTargeted(query: RefreshJobsQuery): boolean {
 interface MonitorFilterBuilder {
   eq(column: string, value: unknown): MonitorFilterBuilder;
   ilike(column: string, pattern: string): MonitorFilterBuilder;
+  or(filters: string, opts?: { referencedTable?: string }): MonitorFilterBuilder;
+}
+
+// PostgREST escaping for an `or` filter value: commas and parentheses are the
+// clause delimiters, so a company name containing them would break the filter.
+// We strip them — alias targets are simple names/slugs and never contain these.
+function sanitizeOrValue(value: string): string {
+  return value.replace(/[(),]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+// Build the PostgREST `or` clause that matches a companyName query against the
+// company's own name *and* any alias legal-names / ats_slug (Google→Alphabet,
+// Meta→Meta Platforms). Returns null when there is nothing to expand to.
+function companyNameOrFilter(companyName: string): string | null {
+  const normalized = normalizeCompanyKey(companyName);
+  const aliasNames = resolveCompanyNameAliases(normalized);
+  const conds: string[] = [`name.ilike.${sanitizeOrValue(companyName)}`];
+  for (const alias of aliasNames) {
+    if (!alias || alias === normalized) continue;
+    conds.push(`name.ilike.${sanitizeOrValue(alias)}`);
+    conds.push(`metadata->>ats_slug.eq.${sanitizeOrValue(alias)}`);
+  }
+  // Also allow the original query itself to match an ats_slug directly.
+  conds.push(`metadata->>ats_slug.eq.${sanitizeOrValue(normalized)}`);
+  return conds.length > 0 ? conds.join(",") : null;
 }
 
 // Apply the monitor + single-company targeting filters shared by the count and
@@ -296,7 +326,13 @@ function applyMonitorFilters(
   let b = builder;
   if (!targeted) b = b.eq("monitor", true);
   if (query.companyId) b = b.eq("id", query.companyId);
-  if (query.companyName) b = b.ilike("name", query.companyName);
+  if (query.companyName) {
+    // Expand short-name aliases (Google→Alphabet, Meta→Meta Platforms) and match
+    // either the company name or its stored ats_slug, instead of a single exact
+    // ilike that would miss the legal-name row.
+    const orFilter = companyNameOrFilter(query.companyName);
+    b = orFilter ? b.or(orFilter) : b.ilike("name", query.companyName);
+  }
   const slug = targetSlug(query);
   if (slug) b = b.eq("metadata->>ats_slug", slug);
   return b;
@@ -410,16 +446,25 @@ async function refreshCompany(
   const lowCoverage = theirStackJobs.length <= LOW_COVERAGE_THRESHOLD;
   const hasAtsBoard = Boolean(atsType && atsSlug);
   const hasCareersUrl = Boolean(careersUrl || jobPortalUrl);
+  // A named-employer adapter (Amazon/Microsoft/Apple) resolves the source purely
+  // from the company name via a public JSON inventory endpoint, so it can report
+  // the exact live total even when the company has no stored careers URL or ATS
+  // hints — the common case for these large employers.
+  const hasNamedAdapter = hasNamedEmployerAdapter(company.name);
 
   // Direct careers-portal source. Always attempt when a public ATS board is
   // resolvable (it yields the authoritative full-inventory total cheaply via a
-  // single JSON request), when TheirStack is thin and the company has any
-  // careers/ATS URL, or when we inferred hints from a legacy row's role URLs
-  // (the whole point of a targeted repair). No API key required.
+  // single JSON request), when a named-employer adapter exists (same, by name),
+  // when TheirStack is thin and the company has any careers/ATS URL, or when we
+  // inferred hints from a legacy row's role URLs (the whole point of a targeted
+  // repair). No API key required.
   const inferredAttempt = report.careers_portal_inferred === true && hasCareersUrl;
   let careersJobs: CareersPortalJob[] = [];
   let resolvedCareersUrl: string | null = null;
-  if ((hasAtsBoard || hasCareersUrl) && (hasAtsBoard || lowCoverage || inferredAttempt)) {
+  if (
+    hasNamedAdapter ||
+    ((hasAtsBoard || hasCareersUrl) && (hasAtsBoard || lowCoverage || inferredAttempt))
+  ) {
     report.careers_portal_attempted = true;
     try {
       const portal = await fetchCareersPortalJobs({

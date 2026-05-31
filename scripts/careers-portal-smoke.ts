@@ -345,6 +345,126 @@ async function runFetchAssertions(): Promise<void> {
     );
   }
 
+  console.log("fetchCareersPortalJobs: Amazon named-employer adapter is exact");
+  {
+    // amazon.jobs search.json reports `hits` as the exact live inventory. A named
+    // employer must resolve to its public JSON endpoint before any HTML scrape and
+    // be marked exact, even with no careersUrl/ATS hints.
+    const amazonJobs = Array.from({ length: 30 }, (_, i) => ({
+      title: `SDE ${i}`,
+      job_path: `/en/jobs/${1000 + i}/sde-${i}`,
+      normalized_location: "Seattle, WA",
+    }));
+    let calledUrl = "";
+    const stubFetch: FetchLike = async (url) => {
+      calledUrl = String(url);
+      return new Response(JSON.stringify({ hits: 9876, jobs: amazonJobs }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const result = await fetchCareersPortalJobs({ companyName: "Amazon" }, { fetch: stubFetch });
+    assert(calledUrl.startsWith("https://www.amazon.jobs/en/search.json"), `hits amazon.jobs (got ${calledUrl})`);
+    assert(result.source === "amazon", `reports amazon source (got ${result.source})`);
+    assert(result.totalCount === 9876, `totalCount is exact hits 9876 (got ${result.totalCount})`);
+    assert(result.countExact === true, `marks amazon count exact (got ${result.countExact})`);
+    assert(result.jobs.length === 20, `caps stored jobs at default maxJobs (got ${result.jobs.length})`);
+  }
+
+  console.log("fetchCareersPortalJobs: Microsoft named-employer adapter is exact");
+  {
+    const msJobs = Array.from({ length: 10 }, (_, i) => ({
+      jobId: String(2000 + i),
+      title: `Cloud Engineer ${i}`,
+      properties: { primaryLocation: "Redmond, WA" },
+    }));
+    let calledUrl = "";
+    const stubFetch: FetchLike = async (url) => {
+      calledUrl = String(url);
+      return new Response(
+        JSON.stringify({ operationResult: { result: { totalJobs: 5432, jobs: msJobs } } }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      );
+    };
+    const result = await fetchCareersPortalJobs({ companyName: "Microsoft" }, { fetch: stubFetch });
+    assert(
+      calledUrl.startsWith("https://gcsservices.careers.microsoft.com/search/api/v1/search"),
+      `hits Microsoft search API (got ${calledUrl})`
+    );
+    assert(result.source === "microsoft", `reports microsoft source (got ${result.source})`);
+    assert(result.totalCount === 5432, `totalCount is exact totalJobs 5432 (got ${result.totalCount})`);
+    assert(result.countExact === true, `marks microsoft count exact (got ${result.countExact})`);
+  }
+
+  console.log("fetchCareersPortalJobs: Apple named-employer adapter is exact");
+  {
+    const appleJobs = Array.from({ length: 8 }, (_, i) => ({
+      positionTitle: `Hardware Engineer ${i}`,
+      positionId: String(3000 + i),
+      locations: [{ name: "Cupertino, CA" }],
+    }));
+    let calledUrl = "";
+    const stubFetch: FetchLike = async (url) => {
+      calledUrl = String(url);
+      return new Response(JSON.stringify({ totalRecords: 1234, searchResults: appleJobs }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const result = await fetchCareersPortalJobs({ companyName: "Apple" }, { fetch: stubFetch });
+    assert(calledUrl === "https://jobs.apple.com/api/role/search", `hits Apple search API (got ${calledUrl})`);
+    assert(result.source === "apple", `reports apple source (got ${result.source})`);
+    assert(result.totalCount === 1234, `totalCount is exact totalRecords 1234 (got ${result.totalCount})`);
+    assert(result.countExact === true, `marks apple count exact (got ${result.countExact})`);
+  }
+
+  console.log("fetchCareersPortalJobs: unexpected adapter shape falls back, not exact");
+  {
+    // Amazon endpoint returns an unexpected shape (no hits): the adapter returns
+    // null and the provider falls back to the HTML scrape, which is NOT exact.
+    const stubFetch: FetchLike = async (url) => {
+      if (String(url).includes("amazon.jobs")) {
+        return new Response(JSON.stringify({ unexpected: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(ANCHOR_HTML, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    };
+    const result = await fetchCareersPortalJobs(
+      { companyName: "Amazon", careersUrl: BASE },
+      { fetch: stubFetch }
+    );
+    assert(result.source === "html", `falls back to html on bad adapter shape (got ${result.source})`);
+    assert(result.countExact === false, `fallback is not exact (got ${result.countExact})`);
+  }
+
+  console.log("fetchCareersPortalJobs: non-named employer skips the adapter path");
+  {
+    // A company with no named adapter must not hit any employer JSON endpoint;
+    // it goes straight to the careers URL HTML scrape.
+    let hitEmployerApi = false;
+    const stubFetch: FetchLike = async (url) => {
+      const u = String(url);
+      if (u.includes("amazon.jobs") || u.includes("careers.microsoft.com") || u.includes("jobs.apple.com")) {
+        hitEmployerApi = true;
+      }
+      return new Response(ANCHOR_HTML, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    };
+    const result = await fetchCareersPortalJobs(
+      { companyName: "Acme", careersUrl: BASE },
+      { fetch: stubFetch }
+    );
+    assert(!hitEmployerApi, "does not call any named-employer endpoint for an unknown company");
+    assert(result.source === "html", `scrapes HTML for unknown company (got ${result.source})`);
+  }
+
   console.log("fetchCareersPortalJobs: scraped HTML count is marked non-exact");
   {
     const stubFetch: FetchLike = async () =>

@@ -3,8 +3,11 @@ import { createClient, supabaseNotConfiguredResponse } from "@/lib/supabase/serv
 import { companyQuerySchema } from "@/lib/validators/company";
 import { fetchJobSpyJobs } from "@/lib/jobs/jobspy";
 import {
-  companyNameMatchStrength,
   normalizeCompanyKey as normalizeKeyPart,
+  resolveSourceTotal,
+  resolveCompanyNameAliases,
+  companyNameMatchStrengthWithAliases,
+  type ResolvedSourceTotal,
 } from "@/lib/companies/search-scope";
 
 export const runtime = "nodejs";
@@ -555,7 +558,8 @@ function getRevenueBandLabel(company: CompanyRow): string {
 function groupByCompany(
   jobs: GroupedJob[],
   companyById: Map<string, CompanyRow>,
-  totalActiveByCompany?: Map<string, { count: number; latestSeenAt: string | null }>
+  totalActiveByCompany?: Map<string, { count: number; latestSeenAt: string | null }>,
+  sourceTotalByCompany?: Map<string, ResolvedSourceTotal>
 ) {
   const map = new Map<string, GroupedCompanyEntry>();
 
@@ -605,6 +609,32 @@ function groupByCompany(
 
   return Array.from(map.values())
     .map((entry) => {
+      const companyKey = normalizeKeyPart(entry.company);
+      // Resolve the authoritative source inventory across *every* duplicate row
+      // for this normalised name, not just the displayed row's metadata. Legacy
+      // duplicates that survived past refreshes often carry empty/stale metadata,
+      // so the exact total (e.g. Pinterest's Greenhouse meta.total = 176) must be
+      // found even when the chosen display row lacks it. Falls back to the single
+      // display row only when the cross-duplicate map wasn't supplied.
+      const resolved: ResolvedSourceTotal =
+        sourceTotalByCompany?.get(companyKey) ??
+        (() => {
+          const t = getSourceOpeningsTotal(entry.metadata);
+          return {
+            exactTotal: t !== null && isSourceOpeningsExact(entry.metadata) ? t : null,
+            nonExactTotal: t !== null && !isSourceOpeningsExact(entry.metadata) ? t : null,
+          };
+        })();
+
+      // When an exact live inventory exists, the matching set can never exceed
+      // it — cap the deduped jobs themselves so jobs.length is authoritative for
+      // every downstream consumer (enforceJobCountIntegrity, dedupeByName). This
+      // is what stops two residual legacy duplicate rows from carrying Pinterest
+      // to 178 when the careers site shows 176.
+      if (resolved.exactTotal !== null && entry.jobs.length > resolved.exactTotal) {
+        entry.jobs = entry.jobs.slice(0, resolved.exactTotal);
+      }
+
       const rolesSummary = Array.from(entry.rolesMap.entries())
         .map(([role, count]) => ({ role, count }))
         .sort((a, b) => b.count - a.count);
@@ -634,36 +664,23 @@ function groupByCompany(
 
       // Totals are keyed by canonical company name (duplicate company_ids for the
       // same company are already collapsed upstream into one deduped count).
-      const totalActive = totalActiveByCompany?.get(normalizeKeyPart(entry.company));
-      // Total company openings: when the cron has persisted the authoritative live
-      // inventory from the ATS board (the number the careers site shows, e.g.
-      // Pinterest 176) that value is the source of truth and wins outright — it is
-      // *not* combined with role-row counts, which can include stale legacy
-      // duplicates that survived past refreshes. Only when no source total exists
-      // do we fall back to the deduped active role count, then the matching set.
-      const sourceTotal = getSourceOpeningsTotal(entry.metadata);
-      const sourceExact = isSourceOpeningsExact(entry.metadata);
+      const totalActive = totalActiveByCompany?.get(companyKey);
       const dedupedActive = totalActive?.count ?? 0;
-      // The matching set is the deduped jobs that passed the filters. It can
-      // never legitimately exceed the company's *exact* live inventory, so cap it
-      // at sourceTotal only when that total is authoritative (a public ATS board
-      // API) — this stops residual stale duplicate rows from inflating the count
-      // above what the careers site shows (e.g. Pinterest 176). A non-exact
-      // scrape total is a lower bound and must not shrink a larger real role set.
-      const matchingCount =
-        sourceTotal !== null && sourceExact
-          ? Math.min(entry.jobs.length, sourceTotal)
-          : entry.jobs.length;
-      // Displayed total openings. An exact source total wins outright. A
-      // non-exact source total is a lower bound, so we surface the larger of it
-      // and the deduped active role count. With no source total we fall back to
-      // the deduped active count / matching set.
+      // The matching set is the deduped jobs that passed the filters, already
+      // capped above at the exact live inventory when one exists for the name, so
+      // it can never exceed what the careers site shows (e.g. Pinterest 176).
+      const matchingCount = entry.jobs.length;
+      // Displayed total openings. An exact source total is authoritative and wins
+      // outright — it is the live count and is *never* inflated by max() with a
+      // stale deduped role count. A non-exact source total is a lower bound, so we
+      // surface the larger of it and the deduped active role count. With no source
+      // total we fall back to the deduped active count / matching set.
       const activeOpeningsTotal =
-        sourceTotal !== null
-          ? sourceExact
-            ? sourceTotal
-            : Math.max(sourceTotal, dedupedActive, matchingCount)
-          : Math.max(dedupedActive, matchingCount);
+        resolved.exactTotal !== null
+          ? resolved.exactTotal
+          : resolved.nonExactTotal !== null
+            ? Math.max(resolved.nonExactTotal, dedupedActive, matchingCount)
+            : Math.max(dedupedActive, matchingCount);
       const latestFromJobs = entry.jobs.reduce<string | null>((latest, job) => {
         const ts = job.posted_at ?? job.createdAt;
         if (!ts) return latest;
@@ -1388,9 +1405,13 @@ function dedupeByName(companies: ValidatedCompany[]): ValidatedCompany[] {
       if (cm !== bm) return cm > bm ? current : best;
       return cj > bj ? current : best;
     });
+    // Resolve the authoritative source inventory across all duplicates. An exact
+    // total caps both the matching set and the displayed total; a non-exact total
+    // is only a lower bound.
+    const resolved = resolveSourceTotal(members);
     // Keep the largest known total and the richest matching set across the
     // duplicates so merging never lowers a count or drops openings.
-    const mergedMatching = members.reduce(
+    let mergedMatching = members.reduce(
       (max, c) => Math.max(max, c.active_openings_matching_filters ?? c.jobCount ?? 0),
       0
     );
@@ -1398,10 +1419,22 @@ function dedupeByName(companies: ValidatedCompany[]): ValidatedCompany[] {
       (max, c) => Math.max(max, c.active_openings_total ?? 0),
       0
     );
-    const mostJobs = members.reduce(
+    let mostJobs = members.reduce(
       (best, c) => (c.jobs.length > best.jobs.length ? c : best),
       winner
     );
+    // An exact live inventory is authoritative: cap the matching set and the
+    // surfaced jobs at it (so two legacy duplicate rows can't push the count past
+    // what the careers site shows), and use it verbatim as the total rather than
+    // max()-ing with a stale role count.
+    if (resolved.exactTotal !== null) {
+      mergedMatching = Math.min(mergedMatching, resolved.exactTotal);
+      if (mostJobs.jobs.length > resolved.exactTotal) {
+        mostJobs = { ...mostJobs, jobs: mostJobs.jobs.slice(0, resolved.exactTotal) };
+      }
+    }
+    const activeOpeningsTotal =
+      resolved.exactTotal !== null ? resolved.exactTotal : Math.max(mergedTotal, mergedMatching);
     result.push({
       ...winner,
       jobs: mostJobs.jobs,
@@ -1411,7 +1444,7 @@ function dedupeByName(companies: ValidatedCompany[]): ValidatedCompany[] {
       jobCount: mostJobs.jobs.length,
       open_roles_count: mostJobs.jobs.length,
       active_openings_matching_filters: mergedMatching,
-      active_openings_total: Math.max(mergedTotal, mergedMatching),
+      active_openings_total: activeOpeningsTotal,
     });
   }
   return result;
@@ -1483,12 +1516,24 @@ export async function GET(req: NextRequest) {
   // rank by name-match strength. This prevents an unrelated high-count company
   // (e.g. Pinterest's 176) from leaking into a Walmart/Apple/NVIDIA search via
   // the cross-company fallback paths below.
+  // Aliases let a short-name query reach the row stored under its legal name:
+  // "Google" → Alphabet (or ats_slug "google"), "Meta" → Meta Platforms (or
+  // ats_slug "meta").
+  const aliasTargets = freeText ? new Set(resolveCompanyNameAliases(freeText)) : new Set<string>();
   const companyNameMatches = freeText
     ? revenueScopedCompanies
-        .map((company) => ({
-          company,
-          strength: companyNameMatchStrength(company.name, freeText),
-        }))
+        .map((company) => {
+          let strength = companyNameMatchStrengthWithAliases(company.name, freeText);
+          // ats_slug match: a query whose alias set includes this company's stored
+          // ATS slug is an exact targeting hit (e.g. "google" → ats_slug "google"
+          // on the Alphabet row).
+          const slug =
+            typeof company.metadata?.["ats_slug"] === "string"
+              ? (company.metadata["ats_slug"] as string).trim().toLowerCase()
+              : "";
+          if (slug && aliasTargets.has(slug)) strength = Math.max(strength, 3);
+          return { company, strength };
+        })
         .filter((entry) => entry.strength > 0)
     : [];
   const isCompanyScopedSearch = companyNameMatches.length > 0;
@@ -1517,6 +1562,22 @@ export async function GET(req: NextRequest) {
   const companyByName = new Map(
     pipelineCompanies.map((company) => [normalizeKeyPart(company.name), company])
   );
+
+  // Resolve the authoritative source inventory per normalised company name across
+  // *all* duplicate rows (different company_ids, same name). This is what lets a
+  // legacy duplicate carrying source_openings_total=176/exact=true cap the count
+  // even when the displayed row's metadata is empty.
+  const rowsByName = new Map<string, CompanyRow[]>();
+  for (const company of pipelineCompanies) {
+    const key = normalizeKeyPart(company.name);
+    const bucket = rowsByName.get(key) ?? [];
+    bucket.push(company);
+    rowsByName.set(key, bucket);
+  }
+  const sourceTotalByCompany = new Map<string, ResolvedSourceTotal>();
+  for (const [key, rows] of rowsByName) {
+    sourceTotalByCompany.set(key, resolveSourceTotal(rows));
+  }
 
   // Resolve each role's company name so duplicate company_ids for the same
   // company collapse to one identity. Roles whose company_id isn't in scope (or
@@ -1783,8 +1844,8 @@ export async function GET(req: NextRequest) {
   console.log("Filtered jobs count:", mergedFiltered.length);
   console.log("After revenue filter:", mergedFiltered.length);
 
-  const primaryGrouped = groupByCompany(primaryFiltered, companyById, totalActiveByCompany);
-  const mergedGrouped = groupByCompany(mergedFiltered, companyById, totalActiveByCompany);
+  const primaryGrouped = groupByCompany(primaryFiltered, companyById, totalActiveByCompany, sourceTotalByCompany);
+  const mergedGrouped = groupByCompany(mergedFiltered, companyById, totalActiveByCompany, sourceTotalByCompany);
   const validated = validateCompanyCounts(primaryGrouped, mergedGrouped);
   // Skip JobSpy/Indeed enrichment in pure universe-listing mode (no search):
   // we are enumerating the seeded universe, not validating opening counts, so

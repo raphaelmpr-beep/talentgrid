@@ -12,8 +12,11 @@
 
 import {
   companyNameMatchStrength,
+  companyNameMatchStrengthWithAliases,
   computeCompanyNameMatches,
   normalizeCompanyKey,
+  resolveCompanyNameAliases,
+  resolveSourceTotal,
   type NamedCompany,
 } from "@/lib/companies/search-scope";
 
@@ -97,6 +100,81 @@ console.log("company search: exact outranks prefix outranks substring");
 console.log("company search: empty query is not a company-name search");
 {
   assert(search("").length === 0, "empty query yields no name matches");
+}
+
+console.log("company-name aliases: short name resolves to legal name");
+{
+  // "Google" must surface the "Alphabet" row (and vice versa); "Meta" must
+  // surface "Meta Platforms". Without aliases, a Google search would miss the
+  // company stored under its legal name.
+  assert(
+    companyNameMatchStrengthWithAliases("Alphabet", normalizeCompanyKey("Google")) === 3,
+    "Google matches Alphabet at exact strength"
+  );
+  assert(
+    companyNameMatchStrengthWithAliases("Alphabet Inc", normalizeCompanyKey("Alphabet")) === 2,
+    "Alphabet matches 'Alphabet Inc' at prefix strength"
+  );
+  assert(
+    companyNameMatchStrengthWithAliases("Meta Platforms", normalizeCompanyKey("Meta")) === 3,
+    "Meta matches 'Meta Platforms' at exact strength"
+  );
+  assert(
+    companyNameMatchStrengthWithAliases("Meta Platforms", normalizeCompanyKey("Meta Platforms")) === 3,
+    "'Meta Platforms' matches 'Meta Platforms' at exact strength"
+  );
+  // Aliases must not bleed into unrelated companies.
+  assert(
+    companyNameMatchStrengthWithAliases("Apple", normalizeCompanyKey("Google")) === 0,
+    "Google does not match Apple via aliases"
+  );
+
+  const aliased = computeCompanyNameMatches(
+    [
+      { id: "alphabet", name: "Alphabet" },
+      { id: "meta", name: "Meta Platforms" },
+      { id: "apple", name: "Apple" },
+    ],
+    normalizeCompanyKey("Google")
+  );
+  // computeCompanyNameMatches uses the non-alias strength; the alias resolution
+  // happens in the route via companyNameMatchStrengthWithAliases, but the alias
+  // set itself must include the legal name.
+  assert(
+    resolveCompanyNameAliases(normalizeCompanyKey("Google")).includes("alphabet"),
+    "Google alias set includes 'alphabet'"
+  );
+  assert(
+    resolveCompanyNameAliases(normalizeCompanyKey("Meta")).includes("meta platforms"),
+    "Meta alias set includes 'meta platforms'"
+  );
+  void aliased;
+}
+
+console.log("source total: exact wins across duplicate legacy rows (Pinterest 176)");
+{
+  // The displayed row carries no source metadata; a legacy duplicate carries the
+  // exact total. The exact total must win for the whole name group so the count
+  // is 176, not the inflated row count.
+  const rows = [
+    { metadata: {} },
+    { metadata: { source_openings_total: 176, source_openings_exact: true } },
+    { metadata: { source_openings_total: 178, source_openings_exact: false } },
+  ];
+  const resolved = resolveSourceTotal(rows);
+  assert(resolved.exactTotal === 176, `exact total resolves to 176 (got ${resolved.exactTotal})`);
+  assert(
+    resolved.nonExactTotal === 178,
+    `non-exact lower bound resolves to 178 (got ${resolved.nonExactTotal})`
+  );
+
+  // With no exact total anywhere, only the non-exact lower bound is known.
+  const noExact = resolveSourceTotal([
+    { metadata: { source_openings_total: 50, source_openings_exact: false } },
+    { metadata: {} },
+  ]);
+  assert(noExact.exactTotal === null, "no exact total when no duplicate reports one");
+  assert(noExact.nonExactTotal === 50, "non-exact total falls back to the max sample");
 }
 
 if (failures > 0) {
