@@ -195,13 +195,15 @@ export default function CompaniesPage() {
   }, [items]);
 
   const filteredSorted = React.useMemo(() => {
+    const totalOpenings = (c: CompanyResult) =>
+      Math.max(c.active_openings_total ?? c.jobCount, c.jobCount);
     const sorted = [...items];
     sorted.sort((a, b) => {
       switch (sort) {
         case "job_count_desc":
-          return b.jobCount - a.jobCount;
+          return totalOpenings(b) - totalOpenings(a);
         case "job_count_asc":
-          return a.jobCount - b.jobCount;
+          return totalOpenings(a) - totalOpenings(b);
         case "name_asc":
           return a.name.localeCompare(b.name);
         case "newest":
@@ -215,6 +217,12 @@ export default function CompaniesPage() {
   React.useEffect(() => {
     setPage(1);
   }, [q, effectiveDomain, effectiveRole, revenueCategory, sort]);
+
+  const filtersActive =
+    q.trim().length > 0 ||
+    effectiveDomain !== "all" ||
+    effectiveRole !== "all" ||
+    revenueCategory !== "all";
 
   const totalPages = Math.max(1, Math.ceil(filteredSorted.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -292,7 +300,7 @@ export default function CompaniesPage() {
         </div>
       ) : (
         <>
-          <CompanyList companies={pageItems} />
+          <CompanyList companies={pageItems} filtersActive={filtersActive} />
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-4 py-4">
               <button

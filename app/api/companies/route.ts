@@ -414,6 +414,17 @@ function roleMatchesFreeText(role: RoleRow, query: string): boolean {
   return haystack.includes(query);
 }
 
+// The authoritative full live inventory count, persisted onto companies.metadata
+// by the cron refresh after hitting the company's ATS board API (e.g. Greenhouse
+// meta.total = 176 for Pinterest). Null when never refreshed.
+function getSourceOpeningsTotal(
+  metadata: Record<string, unknown> | null | undefined
+): number | null {
+  const raw = metadata?.["source_openings_total"];
+  const n = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
+}
+
 function getCompanyRevenue(metadata: Record<string, unknown> | null | undefined): number | null {
   const m = metadata ?? {};
   const annual = parseNumericValue(m["annual_revenue"]);
@@ -537,7 +548,16 @@ function groupByCompany(
 
       const matchingCount = entry.jobs.length;
       const totalActive = totalActiveByCompany?.get(entry.id);
-      const activeOpeningsTotal = Math.max(totalActive?.count ?? 0, matchingCount);
+      // Total company openings: prefer the authoritative live inventory the cron
+      // persisted from the ATS board (the number the careers site shows), then
+      // fall back to active role rows, then to the matching set. This is what the
+      // card surfaces prominently; matchingCount stays as the filtered metric.
+      const sourceTotal = getSourceOpeningsTotal(entry.metadata);
+      const activeOpeningsTotal = Math.max(
+        sourceTotal ?? 0,
+        totalActive?.count ?? 0,
+        matchingCount
+      );
       const latestFromJobs = entry.jobs.reduce<string | null>((latest, job) => {
         const ts = job.posted_at ?? job.createdAt;
         if (!ts) return latest;
@@ -1179,6 +1199,7 @@ const DEFAULT_PAGE_SIZE = 20;
 // identically to companies that do have openings — just with counts of 0.
 function buildZeroOpeningCompany(company: CompanyRow): ValidatedCompany {
   const revenue = getCompanyRevenue(company.metadata);
+  const sourceTotal = getSourceOpeningsTotal(company.metadata) ?? 0;
   return {
     id: company.id,
     name: company.name,
@@ -1194,7 +1215,7 @@ function buildZeroOpeningCompany(company: CompanyRow): ValidatedCompany {
     jobCount: 0,
     open_roles_count: 0,
     active_openings_matching_filters: 0,
-    active_openings_total: 0,
+    active_openings_total: sourceTotal,
     latest_job_seen_at: null,
     top_roles: [],
     revenue_band: getRevenueBandLabel(company),

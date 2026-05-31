@@ -4,12 +4,25 @@ import { Card, CardContent } from "@/components/ui/card";
 import { formatCompactNumber, formatRelative } from "@/lib/utils";
 import type { CompanyResult } from "@/components/company-results/types";
 
-export function CompanyCard({ company }: { company: CompanyResult }) {
+export function CompanyCard({
+  company,
+  filtersActive = false,
+}: {
+  company: CompanyResult;
+  filtersActive?: boolean;
+}) {
   const topRoles = (company.top_roles ?? company.rolesSummary).slice(0, 3);
   const matchingCount = company.active_openings_matching_filters ?? company.jobCount;
-  const totalCount = company.active_openings_total ?? company.jobCount;
+  const totalCount = Math.max(
+    company.active_openings_total ?? company.jobCount,
+    matchingCount
+  );
   const revenueBand = company.revenue_band ?? company.revenueCategory;
   const latestSeen = formatRelative(company.latest_job_seen_at);
+  // Show the matching (filtered) count as a secondary metric only when filters
+  // are actually narrowing the set — i.e. there are active filters and the
+  // matching count differs from the total company inventory.
+  const showMatching = filtersActive && matchingCount !== totalCount;
 
   return (
     <Card className="h-full overflow-hidden border-neutral-200">
@@ -25,12 +38,12 @@ export function CompanyCard({ company }: { company: CompanyResult }) {
           </div>
           <div className="shrink-0 text-right">
             <div className="text-2xl font-semibold tabular-nums text-neutral-900">
-              {formatCompactNumber(matchingCount)}
+              {formatCompactNumber(totalCount)}
             </div>
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Matching openings</p>
-            {totalCount > matchingCount && (
-              <p className="mt-0.5 text-xs text-neutral-400 tabular-nums">
-                {formatCompactNumber(totalCount)} total active
+            <p className="text-xs uppercase tracking-wide text-neutral-500">Total openings</p>
+            {showMatching && (
+              <p className="mt-0.5 text-xs font-medium text-emerald-700 tabular-nums">
+                {formatCompactNumber(matchingCount)} matching filters
               </p>
             )}
           </div>

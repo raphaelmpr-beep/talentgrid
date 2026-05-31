@@ -41,15 +41,38 @@ export type CareersPortalInput = {
   domainFilters?: string[];
   // Max jobs to emit per company. Defaults to DEFAULT_MAX_JOBS.
   maxJobs?: number;
+  // ATS routing hints the importer stores in companies.metadata. When present
+  // we can hit the vendor's public JSON board API directly (full inventory,
+  // exact total) instead of scraping a JS-rendered careers page.
+  atsType?: string | null;
+  atsSlug?: string | null;
 };
 
 export type CareersPortalResult = {
   jobs: CareersPortalJob[];
+  // Full live inventory size for the source. When an ATS JSON board API is hit
+  // this is the vendor-reported total (e.g. Greenhouse meta.total = 176 for
+  // Pinterest), which can exceed jobs.length because `jobs` is capped at
+  // maxJobs for storage. Falls back to jobs.length for scraped HTML sources.
+  totalCount: number;
   // Which URL produced the jobs (careersUrl or jobPortalUrl), for debugging.
   fetchedUrl: string | null;
+  // Resolved source path actually used: "greenhouse" | "lever" | "html" |
+  // "json" etc. Lets the caller know whether the count is authoritative.
+  source?: string;
   // Non-fatal reason when no jobs were extracted (blocked, js_only, etc.).
   // Never contains secrets.
   reason?: string;
+};
+
+// A resolved ATS board endpoint plus the parser that turns its JSON into jobs
+// and an exact total. Vendor JSON APIs are public, key-less, and return the
+// full board, so they are strongly preferred over HTML scraping.
+type AtsBoard = {
+  vendor: "greenhouse" | "lever";
+  apiUrl: string;
+  // Public page a candidate would land on, used as the base for relative URLs.
+  baseUrl: string;
 };
 
 export type CareersPortalOptions = {
@@ -405,6 +428,246 @@ function pickStr(obj: Record<string, unknown>, keys: string[]): string | undefin
   return undefined;
 }
 
+// ----------------------------------------------------------------------------
+// ATS board adapters
+//
+// Most large careers sites are JS-rendered shells backed by an ATS that exposes
+// a public, key-less JSON board API returning the *entire* posting inventory.
+// Hitting that API gives an exact total (the live count users see) instead of
+// the 0-2 anchors an HTML scrape recovers from the SPA shell. Greenhouse is the
+// representative case (Pinterest: gh_jid links, board slug "pinterest").
+// ----------------------------------------------------------------------------
+
+// Extract a Greenhouse board slug from a careers/ATS/job URL. Handles both the
+// vendor-hosted form (boards.greenhouse.io/<slug>) and company pages that link
+// out with ?gh_jid= but encode the slug in a data attribute or path we can't
+// see — for those we rely on the explicit ats_slug hint instead.
+function greenhouseSlugFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.toLowerCase();
+    if (host.endsWith("greenhouse.io")) {
+      // boards.greenhouse.io/acme, job-boards.greenhouse.io/acme, or
+      // boards-api.greenhouse.io/v1/boards/acme/jobs
+      const parts = u.pathname.split("/").filter(Boolean);
+      const boardsIdx = parts.indexOf("boards");
+      if (boardsIdx >= 0 && parts[boardsIdx + 1]) return parts[boardsIdx + 1];
+      if (parts[0]) return parts[0];
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+// Extract a Lever slug from a jobs.lever.co/<slug> or api.lever.co URL.
+function leverSlugFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (!u.hostname.toLowerCase().endsWith("lever.co")) return null;
+    const parts = u.pathname.split("/").filter(Boolean);
+    // api.lever.co/v0/postings/<slug> | jobs.lever.co/<slug>
+    const idx = parts.indexOf("postings");
+    if (idx >= 0 && parts[idx + 1]) return parts[idx + 1];
+    if (parts[0] && parts[0] !== "v0") return parts[0];
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+// Resolve which (if any) public ATS board API to call, from the explicit
+// ats_type/ats_slug hints first, then by sniffing the candidate URLs.
+function resolveAtsBoard(input: CareersPortalInput): AtsBoard | null {
+  const urls = [input.jobPortalUrl, input.careersUrl].filter(
+    (u): u is string => typeof u === "string" && u.trim().length > 0
+  );
+  const atsType = (input.atsType ?? "").trim().toLowerCase();
+  const atsSlug = (input.atsSlug ?? "").trim();
+
+  // Explicit hints win.
+  if (atsType === "greenhouse" && atsSlug) {
+    return greenhouseBoard(atsSlug);
+  }
+  if (atsType === "lever" && atsSlug) {
+    return {
+      vendor: "lever",
+      apiUrl: `https://api.lever.co/v0/postings/${encodeURIComponent(atsSlug)}?mode=json`,
+      baseUrl: `https://jobs.lever.co/${encodeURIComponent(atsSlug)}`,
+    };
+  }
+
+  // Otherwise sniff the URLs.
+  for (const url of urls) {
+    const ghSlug = greenhouseSlugFromUrl(url);
+    if (ghSlug) return greenhouseBoard(ghSlug);
+    const lvSlug = leverSlugFromUrl(url);
+    if (lvSlug) {
+      return {
+        vendor: "lever",
+        apiUrl: `https://api.lever.co/v0/postings/${encodeURIComponent(lvSlug)}?mode=json`,
+        baseUrl: `https://jobs.lever.co/${encodeURIComponent(lvSlug)}`,
+      };
+    }
+  }
+
+  return null;
+}
+
+function greenhouseBoard(slug: string): AtsBoard {
+  return {
+    vendor: "greenhouse",
+    apiUrl: `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs`,
+    baseUrl: `https://boards.greenhouse.io/${encodeURIComponent(slug)}`,
+  };
+}
+
+// When a candidate URL carries a Greenhouse `gh_jid` marker but the board slug
+// is not in the URL or the metadata hints (common for company-hosted careers
+// pages that embed Greenhouse, e.g. pinterestcareers.com), guess slugs from the
+// company name. These are *verified* against the board API before use (see
+// fetchCareersPortalJobs), so a wrong guess yields nothing rather than a bogus
+// count. Returns an ordered list of plausible slugs, most-likely first.
+function greenhouseSlugGuesses(input: CareersPortalInput): string[] {
+  const urls = [input.jobPortalUrl, input.careersUrl].filter(
+    (u): u is string => typeof u === "string" && u.trim().length > 0
+  );
+  const hasGhMarker = urls.some((u) => u.toLowerCase().includes("gh_jid="));
+  if (!hasGhMarker) return [];
+  const base = input.companyName
+    .toLowerCase()
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+  if (!base) return [];
+  const collapsed = base.replace(/\s+/g, "");
+  const firstWord = base.split(/\s+/)[0];
+  const guesses = new Set<string>([collapsed, firstWord]);
+  return [...guesses].filter((s) => s.length >= 2);
+}
+
+// Confirm a guessed Greenhouse slug resolves to a real board before trusting it.
+async function greenhouseBoardExists(
+  slug: string,
+  resolved: Required<Pick<CareersPortalOptions, "fetch" | "timeoutMs" | "userAgent" | "maxBytes">>
+): Promise<boolean> {
+  const fetched = await fetchBounded(
+    `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}`,
+    resolved
+  );
+  if ("reason" in fetched) return false;
+  try {
+    const parsed = JSON.parse(fetched.body) as Record<string, unknown>;
+    return typeof parsed.name === "string" && parsed.name.length > 0;
+  } catch {
+    return false;
+  }
+}
+
+// Parse a Greenhouse board-API body: { jobs: [{ id, title, absolute_url,
+// location: { name } }...], meta: { total } }. Returns the full inventory count
+// plus jobs capped at maxJobs.
+function parseGreenhouseBoard(
+  body: string,
+  board: AtsBoard,
+  maxJobs: number
+): { jobs: CareersPortalJob[]; total: number } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const root = parsed as Record<string, unknown>;
+  const list = Array.isArray(root.jobs) ? (root.jobs as Array<Record<string, unknown>>) : null;
+  if (!list) return null;
+
+  const metaTotal =
+    root.meta && typeof root.meta === "object"
+      ? Number((root.meta as Record<string, unknown>).total)
+      : NaN;
+  const total = Number.isFinite(metaTotal) ? metaTotal : list.length;
+
+  const jobs: CareersPortalJob[] = [];
+  for (const item of list) {
+    const title = pickStr(item, ["title", "name"]);
+    if (!title || title.length < MIN_TITLE_LEN) continue;
+    const rawUrl = pickStr(item, ["absolute_url", "url"]);
+    const url = rawUrl ? resolveUrl(rawUrl, board.baseUrl) : null;
+    const loc =
+      item.location && typeof item.location === "object"
+        ? pickStr(item.location as Record<string, unknown>, ["name"]) ?? null
+        : pickStr(item, ["location"]) ?? null;
+    jobs.push({
+      external_id: makeExternalId(url, title),
+      title: title.slice(0, MAX_TITLE_LEN),
+      url,
+      location: loc,
+      source: "careers_portal",
+      source_url: board.baseUrl,
+    });
+    if (jobs.length >= maxJobs) break;
+  }
+  return { jobs, total };
+}
+
+// Parse a Lever board-API body: a flat array of postings with `text`,
+// `hostedUrl`, and `categories.location`.
+function parseLeverBoard(
+  body: string,
+  board: AtsBoard,
+  maxJobs: number
+): { jobs: CareersPortalJob[]; total: number } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) return null;
+  const list = parsed as Array<Record<string, unknown>>;
+  const total = list.length;
+
+  const jobs: CareersPortalJob[] = [];
+  for (const item of list) {
+    const title = pickStr(item, ["text", "title"]);
+    if (!title || title.length < MIN_TITLE_LEN) continue;
+    const rawUrl = pickStr(item, ["hostedUrl", "applyUrl", "url"]);
+    const url = rawUrl ? resolveUrl(rawUrl, board.baseUrl) : null;
+    let loc: string | null = null;
+    const cats = item.categories;
+    if (cats && typeof cats === "object") {
+      loc = pickStr(cats as Record<string, unknown>, ["location"]) ?? null;
+    }
+    jobs.push({
+      external_id: makeExternalId(url, title),
+      title: title.slice(0, MAX_TITLE_LEN),
+      url,
+      location: loc,
+      source: "careers_portal",
+      source_url: board.baseUrl,
+    });
+    if (jobs.length >= maxJobs) break;
+  }
+  return { jobs, total };
+}
+
+// Fetch + parse a resolved ATS board. Best-effort and non-fatal: returns null
+// on any failure so the caller can fall back to HTML scraping.
+async function fetchAtsBoard(
+  board: AtsBoard,
+  maxJobs: number,
+  resolved: Required<Pick<CareersPortalOptions, "fetch" | "timeoutMs" | "userAgent" | "maxBytes">>
+): Promise<{ jobs: CareersPortalJob[]; total: number } | null> {
+  const fetched = await fetchBounded(board.apiUrl, resolved);
+  if ("reason" in fetched) return null;
+  if (board.vendor === "greenhouse") {
+    return parseGreenhouseBoard(fetched.body, board, maxJobs);
+  }
+  return parseLeverBoard(fetched.body, board, maxJobs);
+}
+
 // Top-level provider entrypoint. Tries jobPortalUrl first (usually the ATS
 // listing page, richer), then careersUrl. Best-effort and non-fatal.
 export async function fetchCareersPortalJobs(
@@ -420,11 +683,46 @@ export async function fetchCareersPortalJobs(
   };
   const maxJobs = input.maxJobs && input.maxJobs > 0 ? Math.floor(input.maxJobs) : DEFAULT_MAX_JOBS;
 
+  // Prefer a public ATS board API when we can resolve one — it returns the full
+  // live inventory and an exact total, which is the whole point of this fix.
+  let board = resolveAtsBoard(input);
+
+  // No board from hints/URLs, but the careers page carries a Greenhouse gh_jid
+  // marker: guess the board slug from the company name and verify each guess
+  // against the board API before trusting it (so a wrong guess can't fabricate
+  // a count). This is what lets pinterestcareers.com resolve to board
+  // "pinterest" with 176 openings.
+  if (!board) {
+    for (const slug of greenhouseSlugGuesses(input)) {
+      if (await greenhouseBoardExists(slug, resolved)) {
+        board = greenhouseBoard(slug);
+        break;
+      }
+    }
+  }
+
+  if (board) {
+    const result = await fetchAtsBoard(board, maxJobs, resolved);
+    if (result && result.total > 0) {
+      const filtered = (input.roleFilters?.length || input.domainFilters?.length)
+        ? result.jobs.filter((j) =>
+            matchesFilters(j.title, input.roleFilters, input.domainFilters)
+          )
+        : result.jobs;
+      return {
+        jobs: filtered,
+        totalCount: result.total,
+        fetchedUrl: board.apiUrl,
+        source: board.vendor,
+      };
+    }
+  }
+
   const candidates = [input.jobPortalUrl, input.careersUrl].filter(
     (u): u is string => typeof u === "string" && u.trim().length > 0
   );
   if (candidates.length === 0) {
-    return { jobs: [], fetchedUrl: null, reason: "no_careers_url" };
+    return { jobs: [], totalCount: 0, fetchedUrl: null, reason: "no_careers_url" };
   }
 
   let lastReason: string | undefined;
@@ -439,8 +737,10 @@ export async function fetchCareersPortalJobs(
       continue;
     }
     let jobs: CareersPortalJob[];
+    let source: string;
     if (fetched.contentType.includes("application/json")) {
       jobs = extractJsonJobs(fetched.body, url, maxJobs);
+      source = "json";
     } else {
       const unscrapable = detectUnscrapable(fetched.body, fetched.contentType);
       if (unscrapable) {
@@ -452,12 +752,15 @@ export async function fetchCareersPortalJobs(
         domainFilters: input.domainFilters,
         maxJobs,
       });
+      source = "html";
     }
     if (jobs.length > 0) {
-      return { jobs, fetchedUrl: url };
+      // Scraped sources can't report a reliable board-wide total, so the
+      // best evidence of inventory size is the (possibly capped) extracted set.
+      return { jobs, totalCount: jobs.length, fetchedUrl: url, source };
     }
     lastReason = "no_jobs_extracted";
   }
 
-  return { jobs: [], fetchedUrl: null, reason: lastReason ?? "no_jobs_extracted" };
+  return { jobs: [], totalCount: 0, fetchedUrl: null, reason: lastReason ?? "no_jobs_extracted" };
 }

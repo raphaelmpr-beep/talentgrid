@@ -37,6 +37,12 @@ type RefreshCompanyReport = {
   theirstack_jobs: number;
   careers_portal_attempted: boolean;
   careers_portal_jobs: number;
+  // Full live inventory the source reports (e.g. Greenhouse meta.total). This is
+  // the number the company's live careers site shows; it can exceed
+  // careers_portal_jobs because the stored/extracted set is capped.
+  careers_portal_total: number;
+  // Resolved source path: "greenhouse" | "lever" | "html" | "json".
+  careers_portal_source?: string;
   careers_portal_reason?: string;
   jobspy_fallback: boolean;
   jobspy_jobs: number;
@@ -76,6 +82,9 @@ type RefreshReport = {
   companies: RefreshCompanyReport[];
   total_theirstack: number;
   total_careers_portal: number;
+  // Sum of full live inventory across companies whose careers source was hit.
+  // This is what should match the live careers-site counts (e.g. Pinterest 176).
+  total_careers_portal_inventory: number;
   total_jobspy: number;
   total_upserted: number;
   total_deactivated: number;
@@ -89,20 +98,29 @@ type RefreshReport = {
 // cut off mid-flight.
 const COMPANY_BUDGET_MS = 20000;
 
-// Pull the careers/ATS portal URLs the import utility stored in
-// companies.metadata. Returns nulls when absent.
+// Pull the careers/ATS portal URLs + ATS routing hints the import utility
+// stored in companies.metadata. Returns nulls when absent.
 function careersUrlsFor(company: MonitoredCompany): {
   careersUrl: string | null;
   jobPortalUrl: string | null;
+  atsType: string | null;
+  atsSlug: string | null;
 } {
   const meta = company.metadata ?? {};
-  const careersUrl =
-    typeof meta.careers_url === "string" && meta.careers_url.trim() ? meta.careers_url : null;
-  const jobPortalUrl =
-    typeof meta.job_portal_url === "string" && meta.job_portal_url.trim()
-      ? meta.job_portal_url
-      : null;
-  return { careersUrl, jobPortalUrl };
+  const str = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() ? v.trim() : null;
+  const source =
+    meta.company_job_source && typeof meta.company_job_source === "object"
+      ? (meta.company_job_source as Record<string, unknown>)
+      : {};
+  return {
+    careersUrl: str(meta.careers_url),
+    jobPortalUrl: str(meta.job_portal_url),
+    // ats_type/ats_slug are top-level shortcuts; company_job_source may also
+    // carry them under its own keys.
+    atsType: str(meta.ats_type) ?? str(source.ats_type) ?? str(source.type) ?? str(source.provider),
+    atsSlug: str(meta.ats_slug) ?? str(source.ats_slug) ?? str(source.slug) ?? str(source.board),
+  };
 }
 
 // Map a careers-portal job into the same role row shape used for TheirStack,
@@ -250,6 +268,7 @@ async function refreshCompany(
     theirstack_jobs: theirStackJobs.length,
     careers_portal_attempted: false,
     careers_portal_jobs: 0,
+    careers_portal_total: 0,
     jobspy_fallback: false,
     jobspy_jobs: 0,
     merged: 0,
@@ -259,13 +278,17 @@ async function refreshCompany(
     errors: [],
   };
 
-  const { careersUrl, jobPortalUrl } = careersUrlsFor(company);
+  const { careersUrl, jobPortalUrl, atsType, atsSlug } = careersUrlsFor(company);
   const lowCoverage = theirStackJobs.length <= LOW_COVERAGE_THRESHOLD;
+  const hasAtsBoard = Boolean(atsType && atsSlug);
+  const hasCareersUrl = Boolean(careersUrl || jobPortalUrl);
 
-  // Direct careers-portal source: try first when TheirStack is thin and the
-  // company has a careers/ATS URL. No API key required.
+  // Direct careers-portal source. Always attempt when a public ATS board is
+  // resolvable (it yields the authoritative full-inventory total cheaply via a
+  // single JSON request) or when TheirStack is thin and the company has any
+  // careers/ATS URL. No API key required.
   let careersJobs: CareersPortalJob[] = [];
-  if (lowCoverage && (careersUrl || jobPortalUrl)) {
+  if ((hasAtsBoard || hasCareersUrl) && (hasAtsBoard || lowCoverage)) {
     report.careers_portal_attempted = true;
     try {
       const portal = await fetchCareersPortalJobs({
@@ -273,9 +296,13 @@ async function refreshCompany(
         companyId: company.id,
         careersUrl: careersUrl ?? jobPortalUrl ?? "",
         jobPortalUrl,
+        atsType,
+        atsSlug,
       });
       careersJobs = portal.jobs;
       report.careers_portal_jobs = portal.jobs.length;
+      report.careers_portal_total = portal.totalCount;
+      report.careers_portal_source = portal.source;
       if (portal.jobs.length === 0 && portal.reason) {
         report.careers_portal_reason = portal.reason;
       }
@@ -390,7 +417,37 @@ async function refreshCompany(
     report
   );
 
+  // Persist the authoritative source inventory total onto the company so the
+  // dashboard / companies API can display it without re-fetching the ATS board
+  // on every page load. Only written when the careers source was actually
+  // exercised this run.
+  if (report.careers_portal_attempted && report.careers_portal_total > 0) {
+    await persistSourceTotal(supabase, company, report);
+  }
+
   return report;
+}
+
+// Merge the live source inventory total into companies.metadata. Non-fatal:
+// failures are recorded as warnings and never abort the batch.
+async function persistSourceTotal(
+  supabase: NonNullable<ReturnType<typeof createFeedAdminClient>>,
+  company: MonitoredCompany,
+  report: RefreshCompanyReport
+): Promise<void> {
+  const metadata = {
+    ...(company.metadata ?? {}),
+    source_openings_total: report.careers_portal_total,
+    source_openings_source: report.careers_portal_source ?? "careers_portal",
+    source_openings_checked_at: new Date().toISOString(),
+  };
+  const { error } = await supabase
+    .from("companies")
+    .update({ metadata, is_hiring: report.careers_portal_total > 0 })
+    .eq("id", company.id);
+  if (error) {
+    report.errors.push(`source_total_persist_failed: ${error.message}`);
+  }
 }
 
 // Mark active rows for one source whose external_id is absent from the latest
@@ -481,6 +538,7 @@ async function processCompanyBounded(
         theirstack_jobs: 0,
         careers_portal_attempted: false,
         careers_portal_jobs: 0,
+        careers_portal_total: 0,
         careers_portal_reason: "company_budget_exceeded",
         jobspy_fallback: false,
         jobspy_jobs: 0,
@@ -544,6 +602,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     companies: [],
     total_theirstack: 0,
     total_careers_portal: 0,
+    total_careers_portal_inventory: 0,
     total_jobspy: 0,
     total_upserted: 0,
     total_deactivated: 0,
@@ -577,6 +636,7 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     report.companies.push(companyReport);
     report.total_theirstack += companyReport.theirstack_jobs;
     report.total_careers_portal += companyReport.careers_portal_jobs;
+    report.total_careers_portal_inventory += companyReport.careers_portal_total;
     report.total_jobspy += companyReport.jobspy_jobs;
     report.total_upserted += companyReport.upserted;
     report.total_deactivated += companyReport.deactivated;
