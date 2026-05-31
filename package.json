@@ -11,6 +11,9 @@
     "import:companies": "tsx scripts/import-companies.ts",
     "import:midmarket": "tsx scripts/import-midmarket-candidates.ts",
     "import:midmarket:dry-run": "tsx scripts/import-midmarket-candidates.ts -- --dry-run",
+    "import:source-candidates": "tsx scripts/import-source-candidates.ts",
+    "import:source-candidates:dry-run": "tsx scripts/import-source-candidates.ts -- --dry-run",
+    "validate:source-candidates": "tsx scripts/validate-source-candidates.ts",
     "build:midmarket-validation-seed": "tsx scripts/build-midmarket-validation-seed.ts",
     "validate:open-roles": "tsx scripts/validate-open-roles.ts",
     "validate:open-roles:sample": "tsx scripts/validate-open-roles.ts -- --limit=10",
@@ -21,7 +24,8 @@
     "smoke:open-roles": "tsx scripts/validate-open-roles-smoke.ts",
     "smoke:midmarket": "tsx scripts/midmarket-candidates-smoke.ts",
     "smoke:candidate-guard": "tsx scripts/candidate-guard-smoke.ts",
-    "smoke:count-diagnostics": "tsx scripts/count-diagnostics-smoke.ts"
+    "smoke:count-diagnostics": "tsx scripts/count-diagnostics-smoke.ts",
+    "smoke:source-candidates": "tsx scripts/source-candidates-smoke.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

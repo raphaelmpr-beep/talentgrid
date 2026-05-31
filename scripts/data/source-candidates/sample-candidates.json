@@ -1,0 +1,49 @@
+{
+  "dataset_name": "ATS source-candidate import fixture",
+  "note": "Small offline fixture exercising the candidate import + validation flow. Greenhouse/Lever are exact_api; Ashby is html_only (non-exact, never promoted); the iCIMS row is unsupported_source_type; the duplicate Greenhouse row collides on the dedup key; the manual row is human-verified and protected.",
+  "records": [
+    {
+      "company_name": "Acme Greenhouse Co",
+      "source_origin": "ats_scrapers",
+      "source_name": "greenhouse",
+      "ats_slug": "acmegh",
+      "careers_url": "https://boards.greenhouse.io/acmegh"
+    },
+    {
+      "company_name": "Beta Lever Inc",
+      "source_origin": "openjobs",
+      "source_name": "lever",
+      "ats_slug": "betalever",
+      "careers_url": "https://jobs.lever.co/betalever"
+    },
+    {
+      "company_name": "Gamma Ashby LLC",
+      "source_origin": "ats_scrapers",
+      "source_name": "ashby",
+      "ats_slug": "GammaAshby",
+      "careers_url": "https://jobs.ashbyhq.com/GammaAshby"
+    },
+    {
+      "company_name": "Delta iCIMS Corp",
+      "source_origin": "openjobs",
+      "source_name": "icims",
+      "ats_slug": "deltaicims",
+      "careers_url": "https://deltaicims.icims.com"
+    },
+    {
+      "company_name": "Acme Greenhouse Co",
+      "source_origin": "openjobs",
+      "source_name": "greenhouse",
+      "ats_slug": "acmegh",
+      "careers_url": "https://boards.greenhouse.io/acmegh"
+    },
+    {
+      "company_name": "Epsilon Manual Co",
+      "source_origin": "manual",
+      "source_name": "greenhouse",
+      "ats_slug": "epsilonmanual",
+      "careers_url": "https://boards.greenhouse.io/epsilonmanual",
+      "manually_verified": true
+    }
+  ]
+}

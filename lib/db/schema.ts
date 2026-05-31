@@ -4,6 +4,7 @@ import {
   text,
   boolean,
   integer,
+  numeric,
   timestamp,
   jsonb,
   index,
@@ -147,6 +148,76 @@ export const signals = pgTable(
   })
 );
 
+// ATS source-candidate enrichment layer. Mirrors
+// supabase/migrations/005_company_job_sources_candidate.sql — a staging table
+// for ATS source mappings discovered from open-source datasets that are
+// quarantined (fetch_enabled=false) until TalentGrid's own provider validates
+// them against the live endpoint and promotes them. See
+// docs/ats-source-candidates.md.
+export const companyJobSourcesCandidate = pgTable(
+  "company_job_sources_candidate",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    companyId: uuid("company_id").references(() => companies.id, {
+      onDelete: "set null",
+    }),
+    companyName: text("company_name").notNull(),
+    // Provenance.
+    sourceOrigin: text("source_origin").notNull().default("other"),
+    sourceOriginUrl: text("source_origin_url"),
+    importedAt: timestamp("imported_at", { withTimezone: true }).notNull().defaultNow(),
+    // Resolved ATS mapping.
+    sourceName: text("source_name"),
+    atsSlug: text("ats_slug"),
+    careersUrl: text("careers_url"),
+    apiUrl: text("api_url"),
+    sourceType: text("source_type"),
+    supportedFetchStrategy: text("supported_fetch_strategy").notNull().default("unsupported"),
+    // Validation lifecycle.
+    validationStatus: text("validation_status").notNull().default("imported_unvalidated"),
+    validatedAt: timestamp("validated_at", { withTimezone: true }),
+    validationError: text("validation_error"),
+    confidenceScore: numeric("confidence_score", { precision: 4, scale: 3 }),
+    // Trust / fetch gating.
+    fetchEnabled: boolean("fetch_enabled").notNull().default(false),
+    validationEnabled: boolean("validation_enabled").notNull().default(true),
+    manuallyVerified: boolean("manually_verified").notNull().default(false),
+    metadata: jsonb("metadata").notNull().default(sql`'{}'::jsonb`),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => ({
+    dedupUq: uniqueIndex("company_job_sources_candidate_dedup_uq").on(
+      sql`lower(${t.companyName})`,
+      sql`coalesce(lower(${t.sourceName}), '')`,
+      sql`coalesce(lower(${t.atsSlug}), '')`,
+      sql`coalesce(lower(${t.apiUrl}), '')`
+    ),
+    fetchableIdx: index("company_job_sources_candidate_fetchable_idx")
+      .on(t.validationStatus)
+      .where(sql`${t.fetchEnabled} = true`),
+    pendingIdx: index("company_job_sources_candidate_pending_idx").on(
+      t.validationStatus,
+      t.validatedAt
+    ),
+    companyIdx: index("company_job_sources_candidate_company_idx")
+      .on(t.companyId)
+      .where(sql`${t.companyId} is not null`),
+    validationStatusCheck: check(
+      "company_job_sources_candidate_validation_status_check",
+      sql`${t.validationStatus} in ('imported_unvalidated','validated_fetchable','validation_failed','stale_import','source_changed','duplicate_source','unsupported_source_type')`
+    ),
+    fetchStrategyCheck: check(
+      "company_job_sources_candidate_fetch_strategy_check",
+      sql`${t.supportedFetchStrategy} in ('exact_api','html_only','unsupported')`
+    ),
+    confidenceRangeCheck: check(
+      "company_job_sources_candidate_confidence_range",
+      sql`${t.confidenceScore} is null or (${t.confidenceScore} >= 0 and ${t.confidenceScore} <= 1)`
+    ),
+  })
+);
+
 export type Company = typeof companies.$inferSelect;
 export type NewCompany = typeof companies.$inferInsert;
 export type Role = typeof roles.$inferSelect;
@@ -157,3 +228,5 @@ export type RolodexEntry = typeof rolodexEntries.$inferSelect;
 export type NewRolodexEntry = typeof rolodexEntries.$inferInsert;
 export type Signal = typeof signals.$inferSelect;
 export type NewSignal = typeof signals.$inferInsert;
+export type CompanyJobSourceCandidate = typeof companyJobSourcesCandidate.$inferSelect;
+export type NewCompanyJobSourceCandidate = typeof companyJobSourcesCandidate.$inferInsert;
