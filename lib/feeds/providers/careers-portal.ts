@@ -288,9 +288,42 @@ function extractAnchorJobs(html: string, baseUrl: string): CareersPortalJob[] {
   return out;
 }
 
-// Pure extractor: given page HTML and the URL it came from, return de-duplicated
-// job records. Structured JSON-LD is preferred; anchor heuristics fill in the
-// rest. Exported for unit/smoke testing without any network access.
+// Pure extractor returning the de-duplicated sample (capped at maxJobs) plus the
+// full de-duplicated count (`total`, uncapped) so a scraped page can report its
+// true inventory size without storing every row. Structured JSON-LD is
+// preferred; anchor heuristics fill in the rest.
+export function extractJobsWithTotal(
+  html: string,
+  baseUrl: string,
+  opts: {
+    roleFilters?: string[];
+    domainFilters?: string[];
+    maxJobs?: number;
+  } = {}
+): { jobs: CareersPortalJob[]; total: number } {
+  const maxJobs = opts.maxJobs && opts.maxJobs > 0 ? Math.floor(opts.maxJobs) : DEFAULT_MAX_JOBS;
+  const structured = extractStructuredJobs(html, baseUrl);
+  const anchors = extractAnchorJobs(html, baseUrl);
+
+  const seen = new Set<string>();
+  const merged: CareersPortalJob[] = [];
+  let total = 0;
+  for (const job of [...structured, ...anchors]) {
+    if (!matchesFilters(job.title, opts.roleFilters, opts.domainFilters)) continue;
+    // Dedupe on external_id first, then on a normalised title+url key.
+    const key = job.external_id || `${job.title}::${job.url ?? ""}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    // Every unique job-like entry counts toward the full inventory; only the
+    // stored sample is bounded by maxJobs.
+    total += 1;
+    if (merged.length < maxJobs) merged.push(job);
+  }
+  return { jobs: merged, total };
+}
+
+// Backwards-compatible wrapper returning just the capped sample. Exported for
+// unit/smoke testing without any network access.
 export function extractJobsFromHtml(
   html: string,
   baseUrl: string,
@@ -300,22 +333,7 @@ export function extractJobsFromHtml(
     maxJobs?: number;
   } = {}
 ): CareersPortalJob[] {
-  const maxJobs = opts.maxJobs && opts.maxJobs > 0 ? Math.floor(opts.maxJobs) : DEFAULT_MAX_JOBS;
-  const structured = extractStructuredJobs(html, baseUrl);
-  const anchors = extractAnchorJobs(html, baseUrl);
-
-  const seen = new Set<string>();
-  const merged: CareersPortalJob[] = [];
-  for (const job of [...structured, ...anchors]) {
-    if (!matchesFilters(job.title, opts.roleFilters, opts.domainFilters)) continue;
-    // Dedupe on external_id first, then on a normalised title+url key.
-    const key = job.external_id || `${job.title}::${job.url ?? ""}`.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    merged.push(job);
-    if (merged.length >= maxJobs) break;
-  }
-  return merged;
+  return extractJobsWithTotal(html, baseUrl, opts).jobs;
 }
 
 // Detect content that we cannot meaningfully scrape. Returns a reason string or
@@ -375,16 +393,19 @@ async function fetchBounded(
 
 // Parse a JSON careers API response best-effort. Some ATS portals expose a JSON
 // listing endpoint; we look for arrays of objects carrying a title-like field.
+// Returns the capped sample plus the full inventory `total` (count of all
+// title-bearing entries in the listing array, before the maxJobs sample cap) so
+// the caller can report the real board size without storing every row.
 function extractJsonJobs(
   body: string,
   baseUrl: string,
   maxJobs: number
-): CareersPortalJob[] {
+): { jobs: CareersPortalJob[]; total: number } {
   let parsed: unknown;
   try {
     parsed = JSON.parse(body);
   } catch {
-    return [];
+    return { jobs: [], total: 0 };
   }
   const arrays: unknown[] = [];
   const visit = (node: unknown, depth: number) => {
@@ -400,11 +421,16 @@ function extractJsonJobs(
   visit(parsed, 0);
   const list = (arrays[0] as Array<Record<string, unknown>>) ?? [];
   const out: CareersPortalJob[] = [];
+  let total = 0;
   for (const item of list) {
     if (!item || typeof item !== "object") continue;
     const title =
       pickStr(item, ["title", "name", "jobTitle", "text"]) ?? "";
     if (title.length < MIN_TITLE_LEN) continue;
+    // Count every valid listing toward the full inventory; only the stored
+    // sample is bounded by maxJobs.
+    total += 1;
+    if (out.length >= maxJobs) continue;
     const rawUrl = pickStr(item, ["absolute_url", "url", "hostedUrl", "applyUrl", "link"]);
     const url = rawUrl ? resolveUrl(rawUrl, baseUrl) : null;
     out.push({
@@ -415,9 +441,8 @@ function extractJsonJobs(
       source: "careers_portal",
       source_url: baseUrl,
     });
-    if (out.length >= maxJobs) break;
   }
-  return out;
+  return { jobs: out, total };
 }
 
 function pickStr(obj: Record<string, unknown>, keys: string[]): string | undefined {
@@ -737,9 +762,12 @@ export async function fetchCareersPortalJobs(
       continue;
     }
     let jobs: CareersPortalJob[];
+    let total: number;
     let source: string;
     if (fetched.contentType.includes("application/json")) {
-      jobs = extractJsonJobs(fetched.body, url, maxJobs);
+      const extracted = extractJsonJobs(fetched.body, url, maxJobs);
+      jobs = extracted.jobs;
+      total = extracted.total;
       source = "json";
     } else {
       const unscrapable = detectUnscrapable(fetched.body, fetched.contentType);
@@ -747,17 +775,20 @@ export async function fetchCareersPortalJobs(
         lastReason = unscrapable;
         continue;
       }
-      jobs = extractJobsFromHtml(fetched.body, url, {
+      const extracted = extractJobsWithTotal(fetched.body, url, {
         roleFilters: input.roleFilters,
         domainFilters: input.domainFilters,
         maxJobs,
       });
+      jobs = extracted.jobs;
+      total = extracted.total;
       source = "html";
     }
     if (jobs.length > 0) {
-      // Scraped sources can't report a reliable board-wide total, so the
-      // best evidence of inventory size is the (possibly capped) extracted set.
-      return { jobs, totalCount: jobs.length, fetchedUrl: url, source };
+      // `jobs` is the (capped) stored sample; `total` is the full de-duplicated
+      // count of job-like entries found on the page, so the inventory count is
+      // not artificially limited by the sample cap.
+      return { jobs, totalCount: Math.max(total, jobs.length), fetchedUrl: url, source };
     }
     lastReason = "no_jobs_extracted";
   }

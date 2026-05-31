@@ -35,6 +35,7 @@ export type {
 export {
   fetchCareersPortalJobs,
   extractJobsFromHtml,
+  extractJobsWithTotal,
 } from "./careers-portal";
 export type {
   CareersPortalInput,

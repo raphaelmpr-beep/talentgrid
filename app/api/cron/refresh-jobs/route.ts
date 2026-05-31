@@ -101,6 +101,12 @@ type RefreshReport = {
 // cut off mid-flight.
 const COMPANY_BUDGET_MS = 20000;
 
+// Upper bound on the number of role rows ingested/stored per company in a single
+// run. The full board is fetched in one request for ATS sources, so this only
+// bounds how many rows we persist — the company's reported source inventory
+// total is always exact, independent of this sample size.
+const CAREERS_SAMPLE_MAX = 500;
+
 // Pull the careers/ATS portal URLs + ATS routing hints the import utility
 // stored in companies.metadata. Returns nulls when absent.
 function careersUrlsFor(company: MonitoredCompany): {
@@ -412,6 +418,11 @@ async function refreshCompany(
         jobPortalUrl,
         atsType,
         atsSlug,
+        // Public ATS boards return the whole inventory in one cheap JSON call,
+        // so ingest the full set of role rows per company (the per-invocation
+        // bound is on the number of companies, not roles within a company). The
+        // reported total still reflects the exact board size regardless of this.
+        maxJobs: CAREERS_SAMPLE_MAX,
       });
       careersJobs = portal.jobs;
       report.careers_portal_jobs = portal.jobs.length;
