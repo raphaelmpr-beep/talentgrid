@@ -26,7 +26,8 @@
     "smoke:candidate-guard": "tsx scripts/candidate-guard-smoke.ts",
     "smoke:count-diagnostics": "tsx scripts/count-diagnostics-smoke.ts",
     "smoke:source-candidates": "tsx scripts/source-candidates-smoke.ts",
-    "smoke:company-card-label": "tsx scripts/company-card-label-smoke.ts"
+    "smoke:company-card-label": "tsx scripts/company-card-label-smoke.ts",
+    "smoke:fetch-pipeline": "tsx scripts/fetch-pipeline-smoke.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

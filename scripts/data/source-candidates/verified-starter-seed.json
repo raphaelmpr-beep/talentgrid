@@ -1,0 +1,142 @@
+{
+  "dataset_name": "Verified ATS starter seed",
+  "note": "Hand-verified public ATS board slugs for a small starter universe (Greenhouse / Lever / Ashby). These are real, publicly reachable JSON board APIs as of the seed date, suitable for end-to-end validation + fetch. Imported with fetch_enabled=false like every candidate; promotion to validated_fetchable only happens after scripts/validate-source-candidates.ts probes the live endpoint and the careers-portal provider returns an exact total. source_name + careers_url are enough for the provider to resolve the api_url; explicit api_url is included where the public endpoint is stable. manually_verified=true marks these as human-asserted so a third-party re-import never clobbers them.",
+  "seed_date": "2026-05-31",
+  "records": [
+    {
+      "company_name": "Figma",
+      "source_origin": "manual",
+      "source_name": "greenhouse",
+      "ats_slug": "figma",
+      "careers_url": "https://boards.greenhouse.io/figma",
+      "api_url": "https://boards-api.greenhouse.io/v1/boards/figma/jobs?content=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Airtable",
+      "source_origin": "manual",
+      "source_name": "greenhouse",
+      "ats_slug": "airtable",
+      "careers_url": "https://boards.greenhouse.io/airtable",
+      "api_url": "https://boards-api.greenhouse.io/v1/boards/airtable/jobs?content=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Stripe",
+      "source_origin": "manual",
+      "source_name": "greenhouse",
+      "ats_slug": "stripe",
+      "careers_url": "https://boards.greenhouse.io/stripe",
+      "api_url": "https://boards-api.greenhouse.io/v1/boards/stripe/jobs?content=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Databricks",
+      "source_origin": "manual",
+      "source_name": "greenhouse",
+      "ats_slug": "databricks",
+      "careers_url": "https://boards.greenhouse.io/databricks",
+      "api_url": "https://boards-api.greenhouse.io/v1/boards/databricks/jobs?content=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Coinbase",
+      "source_origin": "manual",
+      "source_name": "greenhouse",
+      "ats_slug": "coinbase",
+      "careers_url": "https://boards.greenhouse.io/coinbase",
+      "api_url": "https://boards-api.greenhouse.io/v1/boards/coinbase/jobs?content=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Reddit",
+      "source_origin": "manual",
+      "source_name": "greenhouse",
+      "ats_slug": "reddit",
+      "careers_url": "https://boards.greenhouse.io/reddit",
+      "api_url": "https://boards-api.greenhouse.io/v1/boards/reddit/jobs?content=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Robinhood",
+      "source_origin": "manual",
+      "source_name": "greenhouse",
+      "ats_slug": "robinhood",
+      "careers_url": "https://boards.greenhouse.io/robinhood",
+      "api_url": "https://boards-api.greenhouse.io/v1/boards/robinhood/jobs?content=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Gitlab",
+      "source_origin": "manual",
+      "source_name": "greenhouse",
+      "ats_slug": "gitlab",
+      "careers_url": "https://boards.greenhouse.io/gitlab",
+      "api_url": "https://boards-api.greenhouse.io/v1/boards/gitlab/jobs?content=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Netflix",
+      "source_origin": "manual",
+      "source_name": "lever",
+      "ats_slug": "netflix",
+      "careers_url": "https://jobs.lever.co/netflix",
+      "api_url": "https://api.lever.co/v0/postings/netflix?mode=json",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Plaid",
+      "source_origin": "manual",
+      "source_name": "lever",
+      "ats_slug": "plaid",
+      "careers_url": "https://jobs.lever.co/plaid",
+      "api_url": "https://api.lever.co/v0/postings/plaid?mode=json",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Ramp",
+      "source_origin": "manual",
+      "source_name": "ashby",
+      "ats_slug": "ramp",
+      "careers_url": "https://jobs.ashbyhq.com/ramp",
+      "api_url": "https://api.ashbyhq.com/posting-api/job-board/ramp?includeCompensation=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Linear",
+      "source_origin": "manual",
+      "source_name": "ashby",
+      "ats_slug": "linear",
+      "careers_url": "https://jobs.ashbyhq.com/linear",
+      "api_url": "https://api.ashbyhq.com/posting-api/job-board/linear?includeCompensation=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Notion",
+      "source_origin": "manual",
+      "source_name": "ashby",
+      "ats_slug": "notion",
+      "careers_url": "https://jobs.ashbyhq.com/notion",
+      "api_url": "https://api.ashbyhq.com/posting-api/job-board/notion?includeCompensation=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Vercel",
+      "source_origin": "manual",
+      "source_name": "greenhouse",
+      "ats_slug": "vercel",
+      "careers_url": "https://boards.greenhouse.io/vercel",
+      "api_url": "https://boards-api.greenhouse.io/v1/boards/vercel/jobs?content=true",
+      "manually_verified": true
+    },
+    {
+      "company_name": "Anthropic",
+      "source_origin": "manual",
+      "source_name": "greenhouse",
+      "ats_slug": "anthropic",
+      "careers_url": "https://boards.greenhouse.io/anthropic",
+      "api_url": "https://boards-api.greenhouse.io/v1/boards/anthropic/jobs?content=true",
+      "manually_verified": true
+    }
+  ]
+}

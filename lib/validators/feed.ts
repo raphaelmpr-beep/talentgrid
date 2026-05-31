@@ -74,3 +74,27 @@ export const refreshJobsQuerySchema = z
   .strip();
 
 export type RefreshJobsQuery = z.infer<typeof refreshJobsQuerySchema>;
+
+// POST /api/jobs/fetch-company body. Targets one company by id.
+export const fetchCompanyBodySchema = z
+  .object({
+    company_id: z.string().uuid(),
+    dryRun: z.boolean().optional().default(false),
+    maxJobs: z.number().int().min(1).max(1000).optional(),
+  })
+  .strip();
+
+export type FetchCompanyBody = z.infer<typeof fetchCompanyBodySchema>;
+
+// POST /api/jobs/fetch-all body. Bounded batch across companies that have a
+// validated fetchable source.
+export const fetchAllBodySchema = z
+  .object({
+    dryRun: z.boolean().optional().default(false),
+    limit: z.number().int().min(1).max(200).optional().default(50),
+    offset: z.number().int().min(0).optional().default(0),
+    maxJobs: z.number().int().min(1).max(1000).optional(),
+  })
+  .strip();
+
+export type FetchAllBody = z.infer<typeof fetchAllBodySchema>;

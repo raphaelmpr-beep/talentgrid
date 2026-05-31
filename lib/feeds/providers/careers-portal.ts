@@ -76,7 +76,7 @@ export type CareersPortalResult = {
 // and an exact total. Vendor JSON APIs are public, key-less, and return the
 // full board, so they are strongly preferred over HTML scraping.
 type AtsBoard = {
-  vendor: "greenhouse" | "lever" | "workday";
+  vendor: "greenhouse" | "lever" | "ashby" | "workday";
   apiUrl: string;
   // Public page a candidate would land on, used as the base for relative URLs.
   baseUrl: string;
@@ -511,6 +511,23 @@ function leverSlugFromUrl(url: string): string | null {
   return null;
 }
 
+// Extract an Ashby job-board slug from a jobs.ashbyhq.com/<slug> or
+// api.ashbyhq.com/posting-api/job-board/<slug> URL.
+function ashbySlugFromUrl(url: string): string | null {
+  try {
+    const u = new URL(url);
+    if (!u.hostname.toLowerCase().endsWith("ashbyhq.com")) return null;
+    const parts = u.pathname.split("/").filter(Boolean);
+    const idx = parts.indexOf("job-board");
+    if (idx >= 0 && parts[idx + 1]) return parts[idx + 1];
+    // jobs.ashbyhq.com/<slug> — first path segment is the board.
+    if (parts[0] && parts[0] !== "posting-api") return parts[0];
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 // Derive a Workday CXS board from a public Workday candidate URL of the shape
 //   https://{tenant}.{dc}.myworkdayjobs.com/{...}/{site}[/...]
 // The public, key-less CXS jobs endpoint is
@@ -565,11 +582,10 @@ function resolveAtsBoard(input: CareersPortalInput): AtsBoard | null {
     return greenhouseBoard(atsSlug);
   }
   if (atsType === "lever" && atsSlug) {
-    return {
-      vendor: "lever",
-      apiUrl: `https://api.lever.co/v0/postings/${encodeURIComponent(atsSlug)}?mode=json`,
-      baseUrl: `https://jobs.lever.co/${encodeURIComponent(atsSlug)}`,
-    };
+    return leverBoard(atsSlug);
+  }
+  if (atsType === "ashby" && atsSlug) {
+    return ashbyBoard(atsSlug);
   }
   // Workday needs the full tenant/site/host, which the bare ats_slug can't carry
   // — so it is resolved by sniffing the candidate URL below regardless of hint.
@@ -579,18 +595,33 @@ function resolveAtsBoard(input: CareersPortalInput): AtsBoard | null {
     const ghSlug = greenhouseSlugFromUrl(url);
     if (ghSlug) return greenhouseBoard(ghSlug);
     const lvSlug = leverSlugFromUrl(url);
-    if (lvSlug) {
-      return {
-        vendor: "lever",
-        apiUrl: `https://api.lever.co/v0/postings/${encodeURIComponent(lvSlug)}?mode=json`,
-        baseUrl: `https://jobs.lever.co/${encodeURIComponent(lvSlug)}`,
-      };
-    }
+    if (lvSlug) return leverBoard(lvSlug);
+    const asSlug = ashbySlugFromUrl(url);
+    if (asSlug) return ashbyBoard(asSlug);
     const wd = workdayBoardFromUrl(url);
     if (wd) return wd;
   }
 
   return null;
+}
+
+function leverBoard(slug: string): AtsBoard {
+  return {
+    vendor: "lever",
+    apiUrl: `https://api.lever.co/v0/postings/${encodeURIComponent(slug)}?mode=json`,
+    baseUrl: `https://jobs.lever.co/${encodeURIComponent(slug)}`,
+  };
+}
+
+// Ashby's public posting-api returns the full board in one keyless JSON request,
+// so the count is vendor-exact (like Greenhouse/Lever). includeCompensation=true
+// matches the documented public endpoint shape.
+function ashbyBoard(slug: string): AtsBoard {
+  return {
+    vendor: "ashby",
+    apiUrl: `https://api.ashbyhq.com/posting-api/job-board/${encodeURIComponent(slug)}?includeCompensation=true`,
+    baseUrl: `https://jobs.ashbyhq.com/${encodeURIComponent(slug)}`,
+  };
 }
 
 function greenhouseBoard(slug: string): AtsBoard {
@@ -732,6 +763,51 @@ function parseLeverBoard(
   return { jobs, total };
 }
 
+// Parse an Ashby posting-api body: { jobs: [{ title, jobUrl, location,
+// isListed, ... }], ... }. Only listed postings are counted so the total
+// matches the public board. Returns the full inventory count plus jobs capped
+// at maxJobs.
+function parseAshbyBoard(
+  body: string,
+  board: AtsBoard,
+  maxJobs: number
+): { jobs: CareersPortalJob[]; total: number } | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const root = parsed as Record<string, unknown>;
+  const list = Array.isArray(root.jobs) ? (root.jobs as Array<Record<string, unknown>>) : null;
+  if (!list) return null;
+
+  // Ashby marks unlisted/internal postings with isListed=false; the public board
+  // shows only listed ones, so count those for an accurate live total.
+  const listed = list.filter((item) => item.isListed !== false);
+  const total = listed.length;
+
+  const jobs: CareersPortalJob[] = [];
+  for (const item of listed) {
+    const title = pickStr(item, ["title", "name"]);
+    if (!title || title.length < MIN_TITLE_LEN) continue;
+    const rawUrl = pickStr(item, ["jobUrl", "applyUrl", "url"]);
+    const url = rawUrl ? resolveUrl(rawUrl, board.baseUrl) : null;
+    const loc = pickStr(item, ["location", "locationName"]) ?? null;
+    jobs.push({
+      external_id: makeExternalId(url, title),
+      title: title.slice(0, MAX_TITLE_LEN),
+      url,
+      location: loc,
+      source: "careers_portal",
+      source_url: board.baseUrl,
+    });
+    if (jobs.length >= maxJobs) break;
+  }
+  return { jobs, total };
+}
+
 // One page of the Workday CXS jobs API. Workday paginates; a single response
 // carries `total` (exact live inventory) and up to `limit` postings, so we page
 // through `offset` to recover the full board while capping stored rows.
@@ -838,6 +914,9 @@ async function fetchAtsBoard(
   if ("reason" in fetched) return null;
   if (board.vendor === "greenhouse") {
     return parseGreenhouseBoard(fetched.body, board, maxJobs);
+  }
+  if (board.vendor === "ashby") {
+    return parseAshbyBoard(fetched.body, board, maxJobs);
   }
   return parseLeverBoard(fetched.body, board, maxJobs);
 }

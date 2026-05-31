@@ -90,14 +90,13 @@ export type SupportedFetchStrategy = "exact_api" | "html_only" | "unsupported";
 
 // Vendors the careers-portal provider resolves to an EXACT public JSON board
 // today. Validation can promote these to validated_fetchable.
-const EXACT_API_VENDORS = new Set(["greenhouse", "lever", "workday"]);
+const EXACT_API_VENDORS = new Set(["greenhouse", "lever", "ashby", "workday"]);
 
 // Vendors with a public JSON/XML endpoint that TalentGrid does not yet resolve
 // to an exact total in the provider. They are imported as discovery rows but
 // validation will not mark them validated_fetchable (non-exact), matching the
 // research's "do not promote counts as exact" rule.
 const HTML_ONLY_VENDORS = new Set([
-  "ashby",
   "smartrecruiters",
   "workable",
   "recruitee",
