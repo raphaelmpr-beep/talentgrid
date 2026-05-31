@@ -70,8 +70,11 @@ export function CompanyCard({
     if (status === "source_stale") return "Last source check is stale";
     if (status === "fetch_failed") return "Could not reach job source";
     if (primaryLine.value === null) return "Exact job count not available yet";
-    if (isFilteredView && hasConfirmedCount && totalActive !== displayCount) {
-      return `${formatCompactNumber(totalActive)} total openings`;
+    if (isFilteredView && hasConfirmedCount) {
+      const total = company.active_openings_total ?? company.exact_source_total ?? totalActive;
+      if (typeof total === "number" && total !== displayCount) {
+        return `${formatCompactNumber(total)} total openings`;
+      }
     }
     return null;
   })();
@@ -171,7 +174,7 @@ export function CompanyCard({
                 <div className="text-2xl font-semibold tabular-nums text-neutral-900">
                   {formatCompactNumber(primaryLine.value)}
                 </div>
-                <p className="text-xs uppercase tracking-wide text-neutral-500">
+                <p className="text-xs tracking-wide text-neutral-500">
                   {primaryLine.label}
                 </p>
               </>
