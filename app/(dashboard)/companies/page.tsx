@@ -49,8 +49,18 @@ const ROLE_OPTIONS = [
   { value: "ml", label: "ML/AI" },
 ];
 
+// The seeded company universe is large-cap (all >$1B), so the primary revenue
+// buckets are the dataset bands. They filter against companies.revenue_band via
+// the `revenueBand` query param. The legacy sub-$1B buckets remain available
+// for non-seeded companies and use the `revenueCategory` param.
 const REVENUE_OPTIONS = [
   { value: "all", label: "All" },
+  { value: "band:$1B-$10B", label: "$1B-$10B" },
+  { value: "band:$10B-$50B", label: "$10B-$50B" },
+  { value: "band:$50B-$100B", label: "$50B-$100B" },
+  { value: "band:$100B-$250B", label: "$100B-$250B" },
+  { value: "band:$250B-$500B", label: "$250B-$500B" },
+  { value: "band:$500B+", label: "$500B+" },
   { value: "lt_50m", label: "<50M" },
   { value: "50m_100m", label: "50M-100M" },
   { value: "100m_600m", label: "100M-600M" },
@@ -141,11 +151,23 @@ export default function CompaniesPage() {
       };
 
       const params = new URLSearchParams();
-      params.set("isHiring", "true");
+      // Company-universe view: surface monitored/seeded companies even when they
+      // currently have 0 active openings, organised by revenue band, each card
+      // showing its opening count (0+). isHiring is intentionally omitted so the
+      // server does not pre-filter to companies flagged hiring.
+      params.set("includeZeroOpenings", "true");
       if (q.trim()) params.set("q", q.trim());
       if (effectiveDomain !== "all") params.set("domain", effectiveDomain);
       if (effectiveRole !== "all") params.set("role", effectiveRole);
-      if (revenueCategory !== "all") params.set("revenueCategory", revenueCategory);
+      if (revenueCategory !== "all") {
+        // "band:" values filter the denormalised companies.revenue_band column
+        // (large-cap seed bands); the rest use the legacy numeric category.
+        if (revenueCategory.startsWith("band:")) {
+          params.set("revenueBand", revenueCategory.slice("band:".length));
+        } else {
+          params.set("revenueCategory", revenueCategory);
+        }
+      }
 
       fetchCompanies(params)
         .then((nextPage) => {

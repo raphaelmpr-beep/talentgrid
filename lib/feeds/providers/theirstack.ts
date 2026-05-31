@@ -40,6 +40,10 @@ export type TheirStackSearchInput = {
   jobTitleOr?: string[];
   jobCountryCodeOr?: string[];
   companyDomainOr?: string[];
+  // Case-insensitive exact company-name match (OR across values). Used as a
+  // fallback when a monitored company has no domain to target by. Maps to
+  // TheirStack's `company_name_case_insensitive_or` filter.
+  companyNameCaseInsensitiveOr?: string[];
 };
 
 export type TheirStackSearchResult = {
@@ -157,6 +161,13 @@ export function buildSearchBody(
 
   if (input.companyDomainOr && input.companyDomainOr.length > 0) {
     body.company_domain_or = input.companyDomainOr;
+  }
+
+  if (
+    input.companyNameCaseInsensitiveOr &&
+    input.companyNameCaseInsensitiveOr.length > 0
+  ) {
+    body.company_name_case_insensitive_or = input.companyNameCaseInsensitiveOr;
   }
 
   return body;

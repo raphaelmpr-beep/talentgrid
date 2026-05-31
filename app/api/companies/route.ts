@@ -183,6 +183,45 @@ const REVENUE_KEY_BY_LABEL: Record<string, RevenueCategoryKey> = {
   "1b+": "gt_1b",
 };
 
+// Large-cap seed dataset bands stored verbatim in companies.revenue_band by the
+// import utility (see lib/feeds/import-companies.ts). These are all >1B, i.e.
+// subdivisions of the legacy gt_1b bucket, so a request for the gt_1b category
+// must also match any of them. Keyed by a normalised form ("$"/space stripped)
+// so "$1B-$10B", "1b-10b", "$1b - $10b" all resolve to the same band.
+const SEED_REVENUE_BANDS = [
+  "$1B-$10B",
+  "$10B-$50B",
+  "$50B-$100B",
+  "$100B-$250B",
+  "$250B-$500B",
+  "$500B+",
+] as const;
+
+function canonicalBandKey(value: string): string {
+  return value.trim().toLowerCase().replace(/[$\s]/g, "");
+}
+
+const SEED_BAND_KEYS = new Set(SEED_REVENUE_BANDS.map((band) => canonicalBandKey(band)));
+
+// True when the company's stored revenue_band is one of the large-cap seed bands.
+function isSeedRevenueBand(band: string | null | undefined): boolean {
+  if (!band) return false;
+  return SEED_BAND_KEYS.has(canonicalBandKey(band));
+}
+
+// Resolve companies.revenue_band (either a legacy key/label or a seed band) to
+// the legacy RevenueCategoryKey used by the category filter. Seed bands are all
+// above 1B and collapse onto gt_1b.
+function revenueBandToCategoryKey(band: string | null | undefined): RevenueCategoryKey | null {
+  if (!band) return null;
+  const lower = band.trim().toLowerCase();
+  if (lower in REVENUE_LABELS) return lower as RevenueCategoryKey;
+  const fromLabel = REVENUE_KEY_BY_LABEL[lower];
+  if (fromLabel) return fromLabel;
+  if (isSeedRevenueBand(band)) return "gt_1b";
+  return null;
+}
+
 function asLowerText(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
 }
@@ -404,9 +443,14 @@ function getRevenueCategoryLabel(revenue: number | null): string {
 }
 
 function getRevenueBandLabel(company: CompanyRow): string {
-  const explicit = asLowerText(company.revenue_band);
-  if (explicit && REVENUE_LABELS[explicit as RevenueCategoryKey]) {
-    return REVENUE_LABELS[explicit as RevenueCategoryKey];
+  const raw = company.revenue_band?.trim();
+  if (raw) {
+    // Seed dataset bands ("$1B-$10B"…"$500B+") are displayed verbatim.
+    if (isSeedRevenueBand(raw)) return raw;
+    const explicit = raw.toLowerCase();
+    if (REVENUE_LABELS[explicit as RevenueCategoryKey]) {
+      return REVENUE_LABELS[explicit as RevenueCategoryKey];
+    }
   }
   return getRevenueCategoryLabel(getCompanyRevenue(company.metadata));
 }
@@ -1000,15 +1044,28 @@ function companyMatchesRevenueFilters(
   company: CompanyRow,
   options: {
     revenueCategory?: RevenueCategoryKey;
+    revenueBand?: string;
     minRevenue?: number;
     maxRevenue?: number;
     includeUnknownRevenue: boolean;
   }
 ): boolean {
   const revenue = getCompanyRevenue(company.metadata);
+  const storedBand = company.revenue_band?.trim() || null;
+
+  // Exact seed-band filter ("$1B-$10B"…"$500B+"): match the denormalised
+  // companies.revenue_band column directly so seeded companies without metadata
+  // revenue still filter correctly.
+  if (options.revenueBand) {
+    const wantKey = canonicalBandKey(options.revenueBand);
+    if (!storedBand || canonicalBandKey(storedBand) !== wantKey) return false;
+  }
 
   if (options.revenueCategory) {
-    const revenueKey = getRevenueCategoryKey(revenue);
+    // Prefer the stored band (covers seeded companies with no metadata revenue),
+    // falling back to the metadata-derived numeric category.
+    const bandKey = revenueBandToCategoryKey(storedBand);
+    const revenueKey = bandKey ?? getRevenueCategoryKey(revenue);
     if (revenueKey !== options.revenueCategory) return false;
   }
 
@@ -1117,6 +1174,53 @@ function getRoleFamily(role: RoleRow): string | null {
 
 const DEFAULT_PAGE_SIZE = 20;
 
+// Build a zero-opening card for a monitored/seeded company that currently has
+// no active roles. Shapes match the grouped-company output so the UI renders it
+// identically to companies that do have openings — just with counts of 0.
+function buildZeroOpeningCompany(company: CompanyRow): ValidatedCompany {
+  const revenue = getCompanyRevenue(company.metadata);
+  return {
+    id: company.id,
+    name: company.name,
+    location: company.location ?? "Unknown",
+    domain: company.domain,
+    industry: company.industry,
+    description: company.description,
+    logo_url: company.logo_url,
+    is_hiring: company.is_hiring ?? false,
+    metadata: company.metadata,
+    created_at: company.created_at,
+    updated_at: company.updated_at,
+    jobCount: 0,
+    open_roles_count: 0,
+    active_openings_matching_filters: 0,
+    active_openings_total: 0,
+    latest_job_seen_at: null,
+    top_roles: [],
+    revenue_band: getRevenueBandLabel(company),
+    domain_tags: extractStringArray(company.domain_tags),
+    domains: [],
+    rolesSummary: [],
+    revenueCategory: getRevenueCategoryLabel(revenue),
+    revenue,
+    companyMeta: {
+      company: company.name,
+      revenueCategory: getRevenueCategoryLabel(revenue),
+      revenue,
+      location: company.location ?? "Unknown",
+    },
+    jobs: [],
+    roles: [],
+    role_families: {},
+    primaryCount: 0,
+    mergedCount: 0,
+    discrepancy: 0,
+    jobSpyCount: 0,
+    enhanced: false,
+    confidence: "confirmed",
+  } as ValidatedCompany;
+}
+
 export async function GET(req: NextRequest) {
   const startedAt = Date.now();
   const debug = req.nextUrl.searchParams.get("debug") === "true";
@@ -1139,6 +1243,8 @@ export async function GET(req: NextRequest) {
     minRevenue,
     maxRevenue,
     includeUnknownRevenue,
+    includeZeroOpenings,
+    revenueBand,
   } = parsed.data;
 
   const smartQuery = parseSmartQuery(q);
@@ -1167,6 +1273,7 @@ export async function GET(req: NextRequest) {
   const revenueScopedCompanies = (companies ?? []).filter((company) =>
     companyMatchesRevenueFilters(company, {
       revenueCategory,
+      revenueBand,
       minRevenue,
       maxRevenue,
       includeUnknownRevenue,
@@ -1268,8 +1375,15 @@ export async function GET(req: NextRequest) {
     query: freeText,
   });
 
+  // In pure company-universe mode (zero-openings requested, no active search)
+  // we are listing the seeded universe, not hunting for openings — so we skip
+  // the JobSpy/Indeed enrichment paths and their external calls entirely.
+  const universeListing =
+    includeZeroOpenings && !freeText && !effectiveDomain && !effectiveRole;
+
   let jobSpyJobs: GroupedJob[] = [];
-  const shouldTriggerJobSpy = Boolean(freeText) || primaryFiltered.length < 5;
+  const shouldTriggerJobSpy =
+    !universeListing && (Boolean(freeText) || primaryFiltered.length < 5);
   if (shouldTriggerJobSpy) {
     console.warn("Low job count detected → JobSpy triggered", {
       primaryFiltered: primaryFiltered.length,
@@ -1316,7 +1430,7 @@ export async function GET(req: NextRequest) {
     query: freeText,
   });
 
-  if (mergedFiltered.length === 0) {
+  if (mergedFiltered.length === 0 && !universeListing) {
     console.warn("Fallback triggered due to empty dataset", {
       domain: effectiveDomain,
       role: effectiveRole,
@@ -1407,21 +1521,46 @@ export async function GET(req: NextRequest) {
   const primaryGrouped = groupByCompany(primaryFiltered, companyById, totalActiveByCompany);
   const mergedGrouped = groupByCompany(mergedFiltered, companyById, totalActiveByCompany);
   const validated = validateCompanyCounts(primaryGrouped, mergedGrouped);
-  const minimumJobsValidated = await enforceMinimumJobs(validated, freeText || q || "", {
-    domain: effectiveDomain,
-    role: effectiveRole,
-    revenueCategory,
-  });
+  // Skip JobSpy/Indeed enrichment in pure universe-listing mode (no search):
+  // we are enumerating the seeded universe, not validating opening counts, so
+  // there is no reason to fan out external requests per company.
+  const minimumJobsValidated = universeListing
+    ? validated
+    : await enforceMinimumJobs(validated, freeText || q || "", {
+        domain: effectiveDomain,
+        role: effectiveRole,
+        revenueCategory,
+      });
   const withIntegrity = enforceJobCountIntegrity(minimumJobsValidated);
-  const withIndeedValidation = await validateAgainstIndeed(withIntegrity, {
-    query: freeText || q || "",
-    domain: effectiveDomain,
-    role: effectiveRole,
-  });
+  const withIndeedValidation = universeListing
+    ? withIntegrity
+    : await validateAgainstIndeed(withIntegrity, {
+        query: freeText || q || "",
+        domain: effectiveDomain,
+        role: effectiveRole,
+      });
 
-  const annotated = withIndeedValidation.filter(
+  const withOpenings = withIndeedValidation.filter(
     (company) => !enforceOpenRoles || company.jobCount > 0
   );
+
+  // Company-universe mode: append monitored/seeded companies that currently
+  // have 0 active openings so the "All" view shows the full universe (hundreds
+  // of companies) organised by revenue band. These pass through the same
+  // revenue scoping above (revenueScopedCompanies), so band/category filters
+  // still apply. A free-text/domain/role query is intentionally *not* widened
+  // here — zero-opening companies have no roles to match, so we only surface
+  // them when the caller isn't actively searching for specific openings.
+  const annotated = (() => {
+    if (!includeZeroOpenings) return withOpenings;
+    const present = new Set(withOpenings.map((c) => c.id));
+    const isSearchScoped = Boolean(freeText || effectiveDomain || effectiveRole);
+    if (isSearchScoped) return withOpenings;
+    const zeros = revenueScopedCompanies
+      .filter((company) => !present.has(company.id))
+      .map((company) => buildZeroOpeningCompany(company));
+    return [...withOpenings, ...zeros];
+  })();
   console.log("Companies returned:", annotated.length);
 
   logValidationSummary({
@@ -1437,9 +1576,11 @@ export async function GET(req: NextRequest) {
     role: effectiveRole,
     family,
     revenueCategory,
+    revenueBand,
     minRevenue,
     maxRevenue,
     includeUnknownRevenue,
+    includeZeroOpenings,
     q,
     smartQuery,
     jobSpyTriggered: shouldTriggerJobSpy,

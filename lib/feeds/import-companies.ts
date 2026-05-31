@@ -13,11 +13,22 @@
 
 import { z } from "zod";
 
-// Revenue buckets must match app/api/companies/route.ts exactly so the
-// denormalised companies.revenue_band column lines up with the API filter.
+// companies.revenue_band is a free-text label. Two label families flow through
+// it and the API filter must understand both:
+//
+//   1. Legacy internal buckets, capped at 1B+:
+//        lt_50m | 50m_100m | 100m_600m | 600m_1b | gt_1b
+//   2. The large-cap seed dataset bands the import utility ingests:
+//        $1B-$10B | $10B-$50B | $50B-$100B | $100B-$250B | $250B-$500B | $500B+
+//
+// The seed bands are all subdivisions of the legacy gt_1b bucket, so they
+// cannot be losslessly collapsed onto the legacy keys. We therefore store the
+// seed band verbatim (canonicalised) and keep a separate legacy-key normaliser
+// for the older convention. The API filter (app/api/companies/route.ts) matches
+// against both families.
 export type RevenueBand = "lt_50m" | "50m_100m" | "100m_600m" | "600m_1b" | "gt_1b";
 
-const REVENUE_BAND_BY_LABEL: Record<string, RevenueBand> = {
+const LEGACY_REVENUE_BAND_BY_LABEL: Record<string, RevenueBand> = {
   lt_50m: "lt_50m",
   "50m_100m": "50m_100m",
   "100m_600m": "100m_600m",
@@ -30,19 +41,53 @@ const REVENUE_BAND_BY_LABEL: Record<string, RevenueBand> = {
   "1b+": "gt_1b",
 };
 
-export function normalizeRevenueBand(value: unknown): RevenueBand | null {
-  if (typeof value !== "string") return null;
-  const key = value.trim().toLowerCase();
-  return REVENUE_BAND_BY_LABEL[key] ?? null;
+// Canonical seed-dataset bands, keyed by a normalised form (lowercased, "$" and
+// whitespace stripped) so "$1B-$10B", "1b-10b", and " $1B - $10B " all resolve.
+const SEED_REVENUE_BANDS = [
+  "$1B-$10B",
+  "$10B-$50B",
+  "$50B-$100B",
+  "$100B-$250B",
+  "$250B-$500B",
+  "$500B+",
+] as const;
+
+export type SeedRevenueBand = (typeof SEED_REVENUE_BANDS)[number];
+
+function canonicalBandKey(value: string): string {
+  return value.trim().toLowerCase().replace(/[$\s]/g, "");
 }
 
-export function revenueBandFromAmount(revenue: number | null | undefined): RevenueBand | null {
+const SEED_REVENUE_BAND_BY_KEY: Record<string, SeedRevenueBand> = Object.fromEntries(
+  SEED_REVENUE_BANDS.map((band) => [canonicalBandKey(band), band])
+);
+
+// Resolve a caller-supplied revenue_band into the value we persist. Seed bands
+// win and are stored verbatim; otherwise we fall back to the legacy bucket key.
+export function normalizeRevenueBand(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  const seed = SEED_REVENUE_BAND_BY_KEY[canonicalBandKey(trimmed)];
+  if (seed) return seed;
+  return LEGACY_REVENUE_BAND_BY_LABEL[trimmed.toLowerCase()] ?? null;
+}
+
+// Derive a band from a numeric annual-revenue figure. Above 1B we emit the
+// seed band so large-cap companies imported with annual_revenue but no explicit
+// band still land in a meaningful bucket.
+export function revenueBandFromAmount(revenue: number | null | undefined): string | null {
   if (typeof revenue !== "number" || !Number.isFinite(revenue) || revenue <= 0) return null;
   if (revenue < 50_000_000) return "lt_50m";
   if (revenue < 100_000_000) return "50m_100m";
   if (revenue < 600_000_000) return "100m_600m";
   if (revenue < 1_000_000_000) return "600m_1b";
-  return "gt_1b";
+  if (revenue < 10_000_000_000) return "$1B-$10B";
+  if (revenue < 50_000_000_000) return "$10B-$50B";
+  if (revenue < 100_000_000_000) return "$50B-$100B";
+  if (revenue < 250_000_000_000) return "$100B-$250B";
+  if (revenue < 500_000_000_000) return "$250B-$500B";
+  return "$500B+";
 }
 
 // Shape a caller is expected to provide. Everything except `name` is optional;

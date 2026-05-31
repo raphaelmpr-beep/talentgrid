@@ -76,6 +76,18 @@ export const companyQuerySchema = z
       .optional()
       .default("true")
       .transform((v) => v === "true"),
+    // Company-universe mode: when true, monitored companies are returned even
+    // when they currently have 0 active openings, so the "All" view can show
+    // the full seeded universe (hundreds of companies) organised by revenue
+    // band, each with an opening count of 0+.
+    includeZeroOpenings: z
+      .union([z.literal("true"), z.literal("false")])
+      .optional()
+      .default("false")
+      .transform((v) => v === "true"),
+    // Exact large-cap seed band filter ("$1B-$10B"…"$500B+"), matched against
+    // companies.revenue_band. Coexists with the legacy revenueCategory enum.
+    revenueBand: z.string().max(40).optional(),
   })
   .refine((v) => {
     if (typeof v.minRevenue !== "number" || typeof v.maxRevenue !== "number") {

@@ -243,12 +243,16 @@ async function handle(req: NextRequest): Promise<NextResponse> {
 
   for (const company of monitored) {
     let theirStackJobs: TheirStackJob[] = [];
-    if (client.config.configured && company.domain) {
+    if (client.config.configured) {
+      // Prefer the domain filter (most precise). When a monitored/seeded
+      // company has no domain, fall back to a case-insensitive company-name
+      // match so domain-less seed records still get a TheirStack pull instead
+      // of silently returning 0 jobs.
+      const searchInput = company.domain
+        ? { companyDomainOr: [company.domain], limit: 100 }
+        : { companyNameCaseInsensitiveOr: [company.name], limit: 100 };
       try {
-        const res = await client.searchJobs({
-          companyDomainOr: [company.domain],
-          limit: 100,
-        });
+        const res = await client.searchJobs(searchInput);
         theirStackJobs = res.jobs;
       } catch (err) {
         if (!(err instanceof TheirStackNotConfiguredError)) {
