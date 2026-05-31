@@ -260,7 +260,12 @@ export async function fetchCompanyJobs(
     return result;
   }
 
-  if (opts.dryRun) return result;
+  // A dry run exercises the full parser path (normalization + parser summary)
+  // but performs no DB writes: no compensation read, no upsert, no deactivation,
+  // no company-metadata update. The four counters and parser_samples are
+  // populated identically so an operator can preview exactly what a live run
+  // would persist.
+  const dryRun = opts.dryRun === true;
 
   const companyContext = [company.industry, company.description, company.domain]
     .filter(Boolean)
@@ -271,8 +276,11 @@ export async function fetchCompanyJobs(
   // Load the existing compensation precision for this company's rows so a run
   // that comes back with a poorer (or unavailable) compensation never clobbers a
   // richer value already stored. Keyed by external_id. Best-effort: on read
-  // failure we simply skip preservation (treat all as new).
-  const priorComp = await loadPriorCompensation(supabase, company.id);
+  // failure we simply skip preservation (treat all as new). Skipped on dry runs
+  // (no DB access) — preservation then simply doesn't apply to the preview.
+  const priorComp = dryRun
+    ? new Map<string, CompensationStatus>()
+    : await loadPriorCompensation(supabase, company.id);
 
   for (const job of jobs) {
     const externalId = externalIdFromJob(job);
@@ -313,36 +321,40 @@ export async function fetchCompanyJobs(
           compensation_status: comp.compensation_status,
         };
 
-    const { error } = await supabase.from("roles").upsert(
-      {
-        external_id: externalId,
-        company_id: company.id,
-        title: job.title,
-        location: job.location,
-        url: job.url,
-        source: "careers_portal",
-        role_category: roleCategory,
-        domain_category: domainCategory,
-        is_active: true,
-        ...compFields,
-        posted_at: postedAt,
-        posted_status: postedStatus,
-        last_seen_at: now,
-        last_checked_at: now,
-        metadata: {
+    // Live runs persist; dry runs skip the write but still count the row as one
+    // that a live run would have upserted, so the preview totals match.
+    if (!dryRun) {
+      const { error } = await supabase.from("roles").upsert(
+        {
           external_id: externalId,
-          source_url: job.source_url,
-          source_name: source.source_name,
-          ats_vendor: job.ats_vendor ?? null,
-          // Preserve the untouched vendor object for later parser improvements.
-          raw_data: job.raw ?? null,
+          company_id: company.id,
+          title: job.title,
+          location: job.location,
+          url: job.url,
+          source: "careers_portal",
+          role_category: roleCategory,
+          domain_category: domainCategory,
+          is_active: true,
+          ...compFields,
+          posted_at: postedAt,
+          posted_status: postedStatus,
+          last_seen_at: now,
+          last_checked_at: now,
+          metadata: {
+            external_id: externalId,
+            source_url: job.source_url,
+            source_name: source.source_name,
+            ats_vendor: job.ats_vendor ?? null,
+            // Preserve the untouched vendor object for later parser improvements.
+            raw_data: job.raw ?? null,
+          },
         },
-      },
-      { onConflict: "company_id,external_id" }
-    );
-    if (error) {
-      result.error = result.error ?? `role_upsert_failed: ${error.message}`;
-      continue;
+        { onConflict: "company_id,external_id" }
+      );
+      if (error) {
+        result.error = result.error ?? `role_upsert_failed: ${error.message}`;
+        continue;
+      }
     }
     result.upserted_count += 1;
     seenExternalIds.push(externalId);
@@ -372,7 +384,8 @@ export async function fetchCompanyJobs(
   // Deactivate previously-active careers_portal rows for this company that were
   // not seen this run, so a closed posting drops out of the active count. Skips
   // when the pull was empty (a transient failure shouldn't wipe known rows).
-  if (seenExternalIds.length > 0) {
+  // Never runs on a dry run — a preview must not mutate active state.
+  if (!dryRun && seenExternalIds.length > 0) {
     result.deactivated_count = await deactivateUnseen(
       supabase,
       company.id,
@@ -382,8 +395,8 @@ export async function fetchCompanyJobs(
 
   // Persist the exact source inventory onto the company so /api/companies can
   // surface it without re-fetching the board. Only an exact vendor total is
-  // promoted; a non-exact sample is left untouched.
-  if (result.source_count_exact && result.source_total > 0) {
+  // promoted; a non-exact sample is left untouched. Skipped on a dry run.
+  if (!dryRun && result.source_count_exact && result.source_total > 0) {
     const prior = company.metadata ?? {};
     await supabase
       .from("companies")
