@@ -9,8 +9,11 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "import:companies": "tsx scripts/import-companies.ts",
+    "validate:open-roles": "tsx scripts/validate-open-roles.ts",
+    "validate:open-roles:sample": "tsx scripts/validate-open-roles.ts -- --limit=10",
     "smoke:careers-portal": "tsx scripts/careers-portal-smoke.ts",
-    "smoke:company-search": "tsx scripts/company-search-smoke.ts"
+    "smoke:company-search": "tsx scripts/company-search-smoke.ts",
+    "smoke:open-roles": "tsx scripts/validate-open-roles-smoke.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
