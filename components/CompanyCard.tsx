@@ -30,23 +30,49 @@ export function CompanyCard({
   const status = company.source_inventory_status;
   const displayCount = company.display_count ?? totalCount;
   const totalActive = fd?.total_active_job_count ?? totalCount;
+  const isFilteredView =
+    company.display_count_type === "filtered_matching_openings" || countIsFiltered;
+  // Counts may only be presented as confirmed role totals when the backend says
+  // the source is exact (live API) or an exact stored-jobs count. Every other
+  // status is pending/blocked/stale, so the card shows a validation message
+  // instead of a number it cannot stand behind.
+  const hasConfirmedCount =
+    status === "exact_api_count" ||
+    status === "exact_stored_jobs_count" ||
+    // Legacy/cached responses without the contract status still carry a usable
+    // total_active_openings display type from the count contract.
+    (status === undefined && company.display_count_type === "total_active_openings");
 
   const primaryLine = (() => {
     if (status === "non_exact_html_withheld") {
       return { value: null, label: "Careers page available" };
     }
-    if (status === "fetch_failed" || status === "source_not_validated") {
+    if (
+      status === "fetch_failed" ||
+      status === "source_not_validated" ||
+      status === "source_unavailable" ||
+      status === "source_stale"
+    ) {
       return { value: null, label: "Job source needs validation" };
     }
-    if (company.display_count_type === "filtered_matching_openings" || countIsFiltered) {
+    if (isFilteredView && hasConfirmedCount) {
       return { value: displayCount, label: "matching roles" };
     }
-    return { value: displayCount, label: "open roles" };
+    if (hasConfirmedCount) {
+      return { value: displayCount, label: "open roles" };
+    }
+    // Unknown/absent status with no confirmed count: do not assert a role total.
+    return { value: null, label: "Job source needs validation" };
   })();
 
   const subLine = (() => {
     if (status === "non_exact_html_withheld") return "Exact job count not available yet";
-    if (countIsFiltered) return `${formatCompactNumber(totalActive)} total active openings`;
+    if (status === "source_stale") return "Last source check is stale";
+    if (status === "fetch_failed") return "Could not reach job source";
+    if (primaryLine.value === null) return "Exact job count not available yet";
+    if (isFilteredView && hasConfirmedCount && totalActive !== displayCount) {
+      return `${formatCompactNumber(totalActive)} total openings`;
+    }
     return null;
   })();
 
@@ -97,6 +123,35 @@ export function CompanyCard({
       : countNote?.tone === "warn"
         ? "text-amber-700"
         : "text-neutral-600";
+
+  // "Confirmed results" is reserved for sources the backend marks exact (live API
+  // or stored confirmed jobs). Pinterest-style cards — a deduped legacy total
+  // with no live primary/JobSpy coverage — must not claim confirmation; they fall
+  // through to the source-status wording so the label never overstates trust.
+  const trustLabel = (() => {
+    if (company.source_discrepancy) return "Source discrepancy flagged";
+    if (hasConfirmedCount) {
+      return company.confidence === "enhanced" ? "Enhanced results" : "Confirmed results";
+    }
+    switch (status) {
+      case "non_exact_html_withheld":
+        return "Careers page available — exact count pending";
+      case "source_stale":
+        return "Source count may be stale";
+      case "fetch_failed":
+        return "Source fetch failed — count unconfirmed";
+      case "source_unavailable":
+        return "Job source unavailable";
+      case "source_not_validated":
+        return "Source not validated yet";
+      default:
+        return company.confidence === "low" ? "Low confidence" : "Source not validated yet";
+    }
+  })();
+  // The drill-down note must not promise full data when the source is unconfirmed.
+  const drillDownNote = hasConfirmedCount
+    ? "Full job data included for drill-down."
+    : "Visit the careers page for current openings.";
 
   return (
     <Card className="h-full overflow-hidden border-neutral-200">
@@ -164,22 +219,14 @@ export function CompanyCard({
           <p>
             Primary: {company.primaryCount ?? company.jobCount} | JobSpy: +{company.jobSpyCount ?? 0}
           </p>
-          <p className="font-medium">
-            {company.source_discrepancy
-              ? "Source discrepancy flagged"
-              : company.confidence === "enhanced"
-                ? "Enhanced results"
-                : company.confidence === "low"
-                  ? "Low confidence"
-                  : "Confirmed results"}
-          </p>
+          <p className="font-medium">{trustLabel}</p>
           {typeof company.indeedEstimate === "number" && (
             <p>Indeed estimate: {company.indeedEstimate}</p>
           )}
         </div>
 
         <div className="space-y-2 pt-2">
-          <p className="text-xs text-neutral-500">Full job data included for drill-down.</p>
+          <p className="text-xs text-neutral-500">{drillDownNote}</p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link
               href={`/companies/${company.id}`}

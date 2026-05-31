@@ -18,7 +18,7 @@ export function RoleFilter({
   return (
     <div className="space-y-2">
       <p className="text-xs font-medium uppercase tracking-wide text-neutral-600">Roles</p>
-      <div className="scrollbar-hide -mx-1 flex gap-2 overflow-x-auto px-1 py-1">
+      <div className="scrollbar-hide -mx-1 flex flex-wrap gap-2 px-1 py-1 md:flex-nowrap md:overflow-x-auto">
         {options.map((option) => (
           <Button
             key={option.value}
