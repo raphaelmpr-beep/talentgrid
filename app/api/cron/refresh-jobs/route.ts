@@ -13,6 +13,10 @@ import {
   classifyRoleCategory,
   classifyDomainCategory,
 } from "@/lib/feeds/classify";
+import {
+  refreshJobsQuerySchema,
+  type RefreshJobsQuery,
+} from "@/lib/validators/feed";
 
 export const runtime = "nodejs";
 // Vercel cron sends GET requests; we also accept POST for manual triggering.
@@ -39,6 +43,10 @@ type RefreshCompanyReport = {
   merged: number;
   upserted: number;
   deactivated: number;
+  // True when the per-company wall-clock budget was hit; the company is counted
+  // as errored but the batch continues. Distinct from `errors`, which captures
+  // recoverable per-source failures.
+  timed_out: boolean;
   errors: string[];
 };
 
@@ -49,7 +57,22 @@ type RefreshReport = {
   // own careers/ATS URL — so it is always available when a company has one.
   careers_portal_available: boolean;
   jobspy_configured: boolean;
+  // Echo of the bounded-batch window the caller requested, plus the total
+  // matching universe so the caller can page (offset += limit) until
+  // offset >= monitored_total.
+  limit: number;
+  offset: number;
+  monitored_total: number;
   monitored_companies: number;
+  processed: number;
+  skipped: number;
+  errored: number;
+  // Counts of companies whose careers/TheirStack source was actually exercised
+  // in this batch, so a live test can confirm both providers are wired.
+  careers_portal_companies: number;
+  theirstack_companies: number;
+  has_more: boolean;
+  next_offset: number | null;
   companies: RefreshCompanyReport[];
   total_theirstack: number;
   total_careers_portal: number;
@@ -58,6 +81,13 @@ type RefreshReport = {
   total_deactivated: number;
   errors: string[];
 };
+
+// Per-company wall-clock budget. A dead careers portal or hung TheirStack call
+// for one company must not consume the whole Vercel invocation; once a company
+// exceeds this it is recorded as a warning and the batch moves on. Set a little
+// above the provider-level timeouts (8s each) so a normal slow company isn't
+// cut off mid-flight.
+const COMPANY_BUDGET_MS = 20000;
 
 // Pull the careers/ATS portal URLs the import utility stored in
 // companies.metadata. Returns nulls when absent.
@@ -114,17 +144,68 @@ function isAuthorized(req: NextRequest): boolean {
   return false;
 }
 
+// Resolve the single-company targeting filters into the slug we should match,
+// if any. slug/atsSlug both map to companies.metadata.ats_slug (jsonb) — there
+// is no top-level slug column.
+function targetSlug(query: RefreshJobsQuery): string | null {
+  return query.atsSlug ?? query.slug ?? null;
+}
+
+// Minimal view of the PostgREST filter builder. Decoupling from Supabase's
+// fully-recursive generic type here keeps `applyMonitorFilters` from triggering
+// "Type instantiation is excessively deep" on the chained count/page queries.
+interface MonitorFilterBuilder {
+  eq(column: string, value: unknown): MonitorFilterBuilder;
+  ilike(column: string, pattern: string): MonitorFilterBuilder;
+}
+
+// Apply the monitor + single-company targeting filters shared by the count and
+// page queries so both requests stay in sync.
+function applyMonitorFilters(
+  builder: MonitorFilterBuilder,
+  query: RefreshJobsQuery
+): MonitorFilterBuilder {
+  let b = builder.eq("monitor", true);
+  if (query.companyId) b = b.eq("id", query.companyId);
+  if (query.companyName) b = b.ilike("name", query.companyName);
+  const slug = targetSlug(query);
+  if (slug) b = b.eq("metadata->>ats_slug", slug);
+  return b;
+}
+
+// Load a bounded page of monitored companies, applying any single-company
+// targeting filters at the database level so we never pull the whole universe
+// into memory. Returns the page plus the total matching count so the caller can
+// report has_more / next_offset for paging through the universe.
 async function loadMonitoredCompanies(
-  supabase: ReturnType<typeof createFeedAdminClient>
-): Promise<MonitoredCompany[]> {
-  if (!supabase) return [];
-  const { data, error } = await supabase
+  supabase: NonNullable<ReturnType<typeof createFeedAdminClient>>,
+  query: RefreshJobsQuery
+): Promise<{ companies: MonitoredCompany[]; total: number }> {
+  const countBuilder = supabase
     .from("companies")
-    .select("id,name,domain,industry,description,metadata")
-    .eq("monitor", true)
-    .limit(500);
-  if (error || !data) return [];
-  return data as MonitoredCompany[];
+    .select("id", { count: "exact", head: true });
+  const { count } = await (applyMonitorFilters(
+    countBuilder as unknown as MonitorFilterBuilder,
+    query
+  ) as unknown as PromiseLike<{ count: number | null }>);
+
+  const pageBuilder = supabase
+    .from("companies")
+    .select("id,name,domain,industry,description,metadata");
+  const filtered = applyMonitorFilters(
+    pageBuilder as unknown as MonitorFilterBuilder,
+    query
+  ) as unknown as {
+    order(column: string, opts: { ascending: boolean }): {
+      range(from: number, to: number): PromiseLike<{ data: unknown; error: unknown }>;
+    };
+  };
+  const { data, error } = await filtered
+    .order("id", { ascending: true })
+    .range(query.offset, query.offset + query.limit - 1);
+
+  if (error || !data) return { companies: [], total: count ?? 0 };
+  return { companies: data as MonitoredCompany[], total: count ?? 0 };
 }
 
 function dedupeJobs(
@@ -174,6 +255,7 @@ async function refreshCompany(
     merged: 0,
     upserted: 0,
     deactivated: 0,
+    timed_out: false,
     errors: [],
   };
 
@@ -344,8 +426,91 @@ async function deactivateStale(
   return count;
 }
 
+// Resolve a single company end-to-end: pull TheirStack, then merge/upsert via
+// refreshCompany. Both providers are individually time-bounded inside; this is
+// the unit we wrap with the per-company wall-clock budget.
+async function processCompany(
+  company: MonitoredCompany,
+  client: ReturnType<typeof createTheirStackClient>,
+  dryRun: boolean,
+  supabase: ReturnType<typeof createFeedAdminClient>
+): Promise<RefreshCompanyReport> {
+  let theirStackJobs: TheirStackJob[] = [];
+  const preErrors: string[] = [];
+  if (client.config.configured) {
+    // Prefer the domain filter (most precise). When a monitored/seeded company
+    // has no domain, fall back to a case-insensitive company-name match so
+    // domain-less seed records still get a TheirStack pull instead of silently
+    // returning 0 jobs.
+    const searchInput = company.domain
+      ? { companyDomainOr: [company.domain], limit: 100 }
+      : { companyNameCaseInsensitiveOr: [company.name], limit: 100 };
+    try {
+      const res = await client.searchJobs(searchInput);
+      theirStackJobs = res.jobs;
+    } catch (err) {
+      if (!(err instanceof TheirStackNotConfiguredError)) {
+        preErrors.push(
+          `theirstack search failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+  }
+
+  const companyReport = await refreshCompany(company, theirStackJobs, dryRun, supabase);
+  companyReport.errors.unshift(...preErrors);
+  return companyReport;
+}
+
+// Race a per-company refresh against a wall-clock budget so one stalled source
+// can never block the whole batch. On timeout we return a report marked
+// timed_out — the underlying providers already abort their own fetches, so this
+// is a backstop, not the primary timeout.
+async function processCompanyBounded(
+  company: MonitoredCompany,
+  client: ReturnType<typeof createTheirStackClient>,
+  dryRun: boolean,
+  supabase: ReturnType<typeof createFeedAdminClient>
+): Promise<RefreshCompanyReport> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<RefreshCompanyReport>((resolve) => {
+    timer = setTimeout(() => {
+      resolve({
+        company_id: company.id,
+        name: company.name,
+        theirstack_jobs: 0,
+        careers_portal_attempted: false,
+        careers_portal_jobs: 0,
+        careers_portal_reason: "company_budget_exceeded",
+        jobspy_fallback: false,
+        jobspy_jobs: 0,
+        merged: 0,
+        upserted: 0,
+        deactivated: 0,
+        timed_out: true,
+        errors: [`company_budget_exceeded after ${COMPANY_BUDGET_MS}ms`],
+      });
+    }, COMPANY_BUDGET_MS);
+  });
+  try {
+    return await Promise.race([
+      processCompany(company, client, dryRun, supabase),
+      timeout,
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function handle(req: NextRequest): Promise<NextResponse> {
-  const dryRun = req.nextUrl.searchParams.get("dryRun") === "true";
+  const parsed = refreshJobsQuerySchema.safeParse(
+    Object.fromEntries(req.nextUrl.searchParams)
+  );
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+  }
+  const query = parsed.data;
+  const dryRun = query.dryRun;
 
   // Real (mutating) runs require a valid secret. Dry-runs are always safe.
   if (!dryRun && !isAuthorized(req)) {
@@ -365,7 +530,17 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     theirstack_configured: client.config.configured,
     careers_portal_available: true,
     jobspy_configured: Boolean(process.env.JOBSPY_ENDPOINT),
+    limit: query.limit,
+    offset: query.offset,
+    monitored_total: 0,
     monitored_companies: 0,
+    processed: 0,
+    skipped: 0,
+    errored: 0,
+    careers_portal_companies: 0,
+    theirstack_companies: 0,
+    has_more: false,
+    next_offset: null,
     companies: [],
     total_theirstack: 0,
     total_careers_portal: 0,
@@ -375,46 +550,48 @@ async function handle(req: NextRequest): Promise<NextResponse> {
     errors: [],
   };
 
-  const monitored = await loadMonitoredCompanies(supabase);
+  if (!supabase) {
+    report.errors.push(
+      "supabase admin client not configured (set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY)"
+    );
+    return NextResponse.json(report);
+  }
+
+  const { companies: monitored, total } = await loadMonitoredCompanies(supabase, query);
+  report.monitored_total = total;
   report.monitored_companies = monitored.length;
+  report.has_more = query.offset + monitored.length < total;
+  report.next_offset = report.has_more ? query.offset + query.limit : null;
 
   if (monitored.length === 0) {
     report.errors.push(
-      "no monitored companies found (set companies.monitor = true to enrol)"
+      total === 0
+        ? "no monitored companies match the requested filters (set companies.monitor = true to enrol)"
+        : "offset is beyond the matching set; nothing to process in this window"
     );
     return NextResponse.json(report);
   }
 
   for (const company of monitored) {
-    let theirStackJobs: TheirStackJob[] = [];
-    if (client.config.configured) {
-      // Prefer the domain filter (most precise). When a monitored/seeded
-      // company has no domain, fall back to a case-insensitive company-name
-      // match so domain-less seed records still get a TheirStack pull instead
-      // of silently returning 0 jobs.
-      const searchInput = company.domain
-        ? { companyDomainOr: [company.domain], limit: 100 }
-        : { companyNameCaseInsensitiveOr: [company.name], limit: 100 };
-      try {
-        const res = await client.searchJobs(searchInput);
-        theirStackJobs = res.jobs;
-      } catch (err) {
-        if (!(err instanceof TheirStackNotConfiguredError)) {
-          report.errors.push(
-            `theirstack search failed (${company.name}): ${err instanceof Error ? err.message : String(err)}`
-          );
-        }
-      }
-    }
-
-    const companyReport = await refreshCompany(company, theirStackJobs, dryRun, supabase);
+    const companyReport = await processCompanyBounded(company, client, dryRun, supabase);
     report.companies.push(companyReport);
     report.total_theirstack += companyReport.theirstack_jobs;
     report.total_careers_portal += companyReport.careers_portal_jobs;
     report.total_jobspy += companyReport.jobspy_jobs;
     report.total_upserted += companyReport.upserted;
     report.total_deactivated += companyReport.deactivated;
+
+    report.processed += 1;
+    if (companyReport.theirstack_jobs > 0) report.theirstack_companies += 1;
+    if (companyReport.careers_portal_attempted) report.careers_portal_companies += 1;
+    if (companyReport.timed_out || companyReport.errors.length > 0) {
+      report.errored += 1;
+    }
   }
+
+  // `skipped` reflects monitored companies in the matching set that this bounded
+  // window did not touch (the caller pages through them via next_offset).
+  report.skipped = Math.max(0, total - (query.offset + report.processed));
 
   return NextResponse.json(report);
 }

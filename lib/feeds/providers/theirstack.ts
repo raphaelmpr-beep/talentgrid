@@ -63,13 +63,21 @@ export type TheirStackClient = {
 export type TheirStackClientOptions = {
   fetch?: FetchLike;
   config?: ProviderConfig;
+  // Per-request timeout (ms). Guards against a slow/hung TheirStack response
+  // blocking the whole refresh batch. Defaults to DEFAULT_REQUEST_TIMEOUT_MS.
+  timeoutMs?: number;
 };
+
+// Bound a single TheirStack request so one slow upstream call can't stall the
+// bounded-batch refresh long enough to hit a Vercel function timeout.
+const DEFAULT_REQUEST_TIMEOUT_MS = 8000;
 
 export function createTheirStackClient(
   options: TheirStackClientOptions = {}
 ): TheirStackClient {
   const config = options.config ?? theirStackConfig();
   const fetchImpl: FetchLike = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const timeoutMs = options.timeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
 
   return {
     config,
@@ -82,15 +90,28 @@ export function createTheirStackClient(
 
       const requestBody = buildSearchBody(input);
 
-      const res = await fetchImpl(url.toString(), {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${config.credentials.apiKey}`,
-          accept: "application/json",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      let res: Response;
+      try {
+        res = await fetchImpl(url.toString(), {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${config.credentials.apiKey}`,
+            accept: "application/json",
+            "content-type": "application/json",
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal,
+        });
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") {
+          throw new TheirStackRequestError(0, `timeout after ${timeoutMs}ms`);
+        }
+        throw err;
+      } finally {
+        clearTimeout(timer);
+      }
       if (!res.ok) {
         throw new TheirStackRequestError(res.status, await safeText(res));
       }

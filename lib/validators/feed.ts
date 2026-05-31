@@ -39,3 +39,38 @@ export const signalIngestSchema = z.object({
 });
 
 export type SignalIngest = z.infer<typeof signalIngestSchema>;
+
+// Bounded-batch params for the cron refresh endpoint. Parsed from the query
+// string (GET, sent by Vercel cron) and accepted on POST too. Keeping the batch
+// finite is what stops the endpoint from evaluating every monitored company —
+// and every careers/TheirStack source — inside a single Vercel invocation.
+export const REFRESH_DEFAULT_LIMIT = 20;
+export const REFRESH_MAX_LIMIT = 50;
+
+// Coerce a query-string value (always a string) into an int, then clamp.
+const intParam = z
+  .union([z.string(), z.number()])
+  .transform((v) => (typeof v === "number" ? v : Number.parseInt(v, 10)))
+  .pipe(z.number().int());
+
+export const refreshJobsQuerySchema = z
+  .object({
+    dryRun: z
+      .union([z.string(), z.boolean()])
+      .transform((v) => v === true || v === "true" || v === "1")
+      .default(false),
+    limit: intParam
+      .pipe(z.number().min(1).max(REFRESH_MAX_LIMIT))
+      .default(REFRESH_DEFAULT_LIMIT),
+    offset: intParam.pipe(z.number().min(0)).default(0),
+    // Optional single-company targeting. companyId is a UUID; companyName is a
+    // case-insensitive exact match; slug/atsSlug match companies.metadata.ats_slug
+    // (the importer stores the ATS slug there — there is no top-level slug column).
+    companyId: z.string().uuid().optional(),
+    companyName: z.string().trim().min(1).max(200).optional(),
+    slug: z.string().trim().min(1).max(200).optional(),
+    atsSlug: z.string().trim().min(1).max(200).optional(),
+  })
+  .strip();
+
+export type RefreshJobsQuery = z.infer<typeof refreshJobsQuerySchema>;
