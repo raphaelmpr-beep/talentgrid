@@ -50,11 +50,6 @@ export function CompanyCard({
     return null;
   })();
 
-  const showCareersLink =
-    status === "non_exact_html_withheld" ||
-    status === "fetch_failed" ||
-    status === "source_not_validated";
-
   const diag = company.count_diagnostics;
   // The count-status indication shown on the card so a 0/low/capped count reads
   // as explained rather than broken. Driven by the backend count_display_mode.
@@ -183,14 +178,22 @@ export function CompanyCard({
           )}
         </div>
 
-        <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="space-y-2 pt-2">
           <p className="text-xs text-neutral-500">Full job data included for drill-down.</p>
-          <Link
-            href={`/companies/${company.id}`}
-            className="inline-flex min-h-[40px] items-center justify-center rounded-md bg-neutral-900 px-3 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
-          >
-            View Jobs
-          </Link>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Link
+              href={`/companies/${company.id}`}
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-md bg-neutral-900 px-3 text-sm font-medium text-white transition-colors hover:bg-neutral-800 sm:w-auto sm:flex-1"
+            >
+              View Jobs
+            </Link>
+            <Link
+              href={`/companies/${company.id}`}
+              className="inline-flex min-h-[44px] w-full items-center justify-center rounded-md border border-neutral-300 bg-white px-3 text-sm font-medium text-neutral-900 transition-colors hover:bg-neutral-50 sm:w-auto sm:flex-1"
+            >
+              Careers Page
+            </Link>
+          </div>
         </div>
       </CardContent>
     </Card>

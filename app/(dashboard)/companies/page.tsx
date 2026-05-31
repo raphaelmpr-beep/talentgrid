@@ -21,7 +21,7 @@ type PageResponse = {
 
 type SortKey = "job_count_desc" | "job_count_asc" | "name_asc" | "newest";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 50;
 
 type SmartQuery = {
   detectedDomain?: string;
@@ -250,13 +250,26 @@ export default function CompaniesPage() {
             detectedDomain={smartQuery.detectedDomain}
             detectedRole={smartQuery.detectedRole}
           />
-          <RevenueFilter
-            options={REVENUE_OPTIONS}
-            value={revenueCategory}
-            onChange={setRevenueCategory}
-          />
-          <DomainFilter options={DOMAIN_OPTIONS} value={effectiveDomain} onChange={setDomain} />
-          <RoleFilter options={ROLE_OPTIONS} value={effectiveRole} onChange={setRole} />
+
+          {/* Filters collapse into an accordion under 768px (tap the summary to
+              expand) and are always visible on md+ so the desktop layout is
+              unchanged. The summary is hidden on md+, and the filter group is
+              force-shown on md+ regardless of the <details> open state. */}
+          <details className="group">
+            <summary className="flex min-h-[44px] cursor-pointer list-none items-center justify-between rounded-md border border-neutral-200 px-3 text-sm font-medium text-neutral-700 md:hidden">
+              <span>Filters{filtersActive ? " · active" : ""}</span>
+              <span className="text-xs text-neutral-500 transition-transform group-open:rotate-180">▾</span>
+            </summary>
+            <div className="mt-3 hidden flex-col gap-3 group-open:flex md:mt-0 md:flex">
+              <RevenueFilter
+                options={REVENUE_OPTIONS}
+                value={revenueCategory}
+                onChange={setRevenueCategory}
+              />
+              <DomainFilter options={DOMAIN_OPTIONS} value={effectiveDomain} onChange={setDomain} />
+              <RoleFilter options={ROLE_OPTIONS} value={effectiveRole} onChange={setRole} />
+            </div>
+          </details>
 
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-xs text-neutral-500">

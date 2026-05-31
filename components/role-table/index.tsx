@@ -83,9 +83,152 @@ export function RoleTable({ roles, emptyMessage }: RoleTableProps) {
     );
   }
 
+  const renderDetails = (role: RoleRow, poc: ChampionPOC | null) => (
+    <div className="grid gap-4 md:grid-cols-3">
+      <div className="md:col-span-2">
+        <h4 className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+          Quick actions
+        </h4>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {role.url && (
+            <a
+              href={role.url}
+              target="_blank"
+              rel="noreferrer"
+              className="text-sm text-blue-600 hover:underline"
+            >
+              View posting ↗
+            </a>
+          )}
+        </div>
+      </div>
+      <div>
+        <h4 className="text-xs font-medium uppercase tracking-wide text-neutral-500">
+          Champion
+        </h4>
+        <div
+          className={cn(
+            "mt-2 rounded-md border p-3",
+            poc
+              ? "border-neutral-200 bg-white"
+              : "border-dashed border-neutral-300 bg-transparent"
+          )}
+        >
+          {poc ? (
+            <>
+              <div className="text-sm font-medium">{poc.name}</div>
+              {poc.title && (
+                <div className="text-xs text-neutral-500">{poc.title}</div>
+              )}
+              <Button
+                className="mt-2"
+                size="sm"
+                onClick={() => setDrawer({ open: true, poc, role })}
+              >
+                Open POC
+              </Button>
+            </>
+          ) : (
+            <div className="text-xs text-neutral-500">
+              No champion identified yet.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <>
-      <div className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      {/* Mobile: stacked cards (no horizontal-scrolling table). */}
+      <ul className="space-y-3 md:hidden">
+        {roles.map((role) => {
+          const poc = extractPOC(role);
+          const isOpen = expanded === role.id;
+          return (
+            <li
+              key={role.id}
+              className="rounded-lg border border-neutral-200 bg-white p-4"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="break-words font-medium text-neutral-900">
+                    {role.title}
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap gap-1 text-xs text-neutral-500">
+                    {role.seniority && <span>{role.seniority}</span>}
+                    {role.employment_type && (
+                      <>
+                        <span>·</span>
+                        <span>{role.employment_type}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div className="shrink-0">{ghostBadge(role.ghost_score)}</div>
+              </div>
+
+              <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm">
+                <dt className="text-xs uppercase tracking-wide text-neutral-400">
+                  Location
+                </dt>
+                <dd className="text-right text-neutral-700">
+                  {role.location ?? (role.remote ? "Remote" : "—")}
+                  {role.remote && role.location && (
+                    <span className="ml-1 text-xs text-neutral-500">
+                      (remote ok)
+                    </span>
+                  )}
+                </dd>
+                <dt className="text-xs uppercase tracking-wide text-neutral-400">
+                  Compensation
+                </dt>
+                <dd className="text-right text-neutral-700">
+                  {salaryLabel(role) ?? "—"}
+                </dd>
+                <dt className="text-xs uppercase tracking-wide text-neutral-400">
+                  Posted
+                </dt>
+                <dd className="text-right text-neutral-500">
+                  {formatRelative(role.posted_at) || "—"}
+                </dd>
+              </dl>
+
+              <div className="mt-3 flex flex-col gap-2">
+                {role.url && (
+                  <a
+                    href={role.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex min-h-[44px] w-full items-center justify-center rounded-md bg-neutral-900 px-3 text-sm font-medium text-white transition-colors hover:bg-neutral-800"
+                  >
+                    Apply ↗
+                  </a>
+                )}
+                <Button
+                  variant="outline"
+                  className="min-h-[44px] w-full"
+                  onClick={() =>
+                    setExpanded((cur) => (cur === role.id ? null : role.id))
+                  }
+                  aria-expanded={isOpen}
+                >
+                  {isOpen ? "Hide details" : "Details"}
+                </Button>
+              </div>
+
+              {isOpen && (
+                <div className="mt-3 border-t border-neutral-100 pt-3">
+                  {renderDetails(role, poc)}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      {/* Desktop/tablet: full table (unchanged layout). */}
+      <div className="hidden overflow-hidden rounded-lg border border-neutral-200 bg-white md:block">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
             <tr>
@@ -151,68 +294,7 @@ export function RoleTable({ roles, emptyMessage }: RoleTableProps) {
                   {isOpen && (
                     <tr className="border-t border-neutral-100 bg-neutral-50/60">
                       <td colSpan={6} className="px-4 py-4">
-                        <div className="grid gap-4 md:grid-cols-3">
-                          <div className="md:col-span-2">
-                            <h4 className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                              Quick actions
-                            </h4>
-                            <div className="mt-2 flex flex-wrap gap-2">
-                              {role.url && (
-                                <a
-                                  href={role.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-sm text-blue-600 hover:underline"
-                                >
-                                  View posting ↗
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                          <div>
-                            <h4 className="text-xs font-medium uppercase tracking-wide text-neutral-500">
-                              Champion
-                            </h4>
-                            <div
-                              className={cn(
-                                "mt-2 rounded-md border p-3",
-                                poc
-                                  ? "border-neutral-200 bg-white"
-                                  : "border-dashed border-neutral-300 bg-transparent"
-                              )}
-                            >
-                              {poc ? (
-                                <>
-                                  <div className="text-sm font-medium">
-                                    {poc.name}
-                                  </div>
-                                  {poc.title && (
-                                    <div className="text-xs text-neutral-500">
-                                      {poc.title}
-                                    </div>
-                                  )}
-                                  <Button
-                                    className="mt-2"
-                                    size="sm"
-                                    onClick={() =>
-                                      setDrawer({
-                                        open: true,
-                                        poc,
-                                        role,
-                                      })
-                                    }
-                                  >
-                                    Open POC
-                                  </Button>
-                                </>
-                              ) : (
-                                <div className="text-xs text-neutral-500">
-                                  No champion identified yet.
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
+                        {renderDetails(role, poc)}
                       </td>
                     </tr>
                   )}
