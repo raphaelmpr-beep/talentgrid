@@ -2,10 +2,11 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createFeedAdminClient } from "@/lib/feeds/supabase-admin";
 import {
   createTheirStackClient,
-  mapJobToCompany,
   mapJobToRole,
+  fetchCareersPortalJobs,
   TheirStackNotConfiguredError,
   type TheirStackJob,
+  type CareersPortalJob,
 } from "@/lib/feeds/providers";
 import { fetchJobSpyJobs } from "@/lib/jobs/jobspy";
 import {
@@ -23,12 +24,16 @@ type MonitoredCompany = {
   domain: string | null;
   industry: string | null;
   description: string | null;
+  metadata: Record<string, unknown> | null;
 };
 
 type RefreshCompanyReport = {
   company_id: string;
   name: string;
   theirstack_jobs: number;
+  careers_portal_attempted: boolean;
+  careers_portal_jobs: number;
+  careers_portal_reason?: string;
   jobspy_fallback: boolean;
   jobspy_jobs: number;
   merged: number;
@@ -40,13 +45,56 @@ type RefreshCompanyReport = {
 type RefreshReport = {
   dryRun: boolean;
   theirstack_configured: boolean;
+  // Direct careers-portal source needs no API key — it fetches the company's
+  // own careers/ATS URL — so it is always available when a company has one.
+  careers_portal_available: boolean;
   jobspy_configured: boolean;
   monitored_companies: number;
   companies: RefreshCompanyReport[];
+  total_theirstack: number;
+  total_careers_portal: number;
+  total_jobspy: number;
   total_upserted: number;
   total_deactivated: number;
   errors: string[];
 };
+
+// Pull the careers/ATS portal URLs the import utility stored in
+// companies.metadata. Returns nulls when absent.
+function careersUrlsFor(company: MonitoredCompany): {
+  careersUrl: string | null;
+  jobPortalUrl: string | null;
+} {
+  const meta = company.metadata ?? {};
+  const careersUrl =
+    typeof meta.careers_url === "string" && meta.careers_url.trim() ? meta.careers_url : null;
+  const jobPortalUrl =
+    typeof meta.job_portal_url === "string" && meta.job_portal_url.trim()
+      ? meta.job_portal_url
+      : null;
+  return { careersUrl, jobPortalUrl };
+}
+
+// Map a careers-portal job into the same role row shape used for TheirStack,
+// so the upsert path is identical. external_id is stable across runs.
+function mapCareersPortalJobToRole(job: CareersPortalJob) {
+  return {
+    external_id: job.external_id,
+    title: job.title,
+    description: null as string | null,
+    location: job.location,
+    remote: false,
+    employment_type: null as string | null,
+    seniority: null as string | null,
+    salary_min: null as number | null,
+    salary_max: null as number | null,
+    url: job.url,
+    source: "careers_portal" as const,
+    posted_at: null as string | null,
+    metadata: { external_id: job.external_id, source_url: job.source_url },
+    is_active: true as const,
+  };
+}
 
 // Auth: prefer CRON_SECRET (Vercel cron sends it as a Bearer token via the
 // `Authorization` header / `?secret=`); fall back to FEED_ADMIN_SECRET so the
@@ -72,7 +120,7 @@ async function loadMonitoredCompanies(
   if (!supabase) return [];
   const { data, error } = await supabase
     .from("companies")
-    .select("id,name,domain,industry,description")
+    .select("id,name,domain,industry,description,metadata")
     .eq("monitor", true)
     .limit(500);
   if (error || !data) return [];
@@ -105,6 +153,10 @@ function dedupeJobs(
   return { theirstack: keep, extraTitles };
 }
 
+// When TheirStack returns this many jobs or fewer, treat the company as
+// under-covered and reach for the company's own careers portal.
+const LOW_COVERAGE_THRESHOLD = 1;
+
 async function refreshCompany(
   company: MonitoredCompany,
   theirStackJobs: TheirStackJob[],
@@ -115,6 +167,8 @@ async function refreshCompany(
     company_id: company.id,
     name: company.name,
     theirstack_jobs: theirStackJobs.length,
+    careers_portal_attempted: false,
+    careers_portal_jobs: 0,
     jobspy_fallback: false,
     jobspy_jobs: 0,
     merged: 0,
@@ -123,9 +177,38 @@ async function refreshCompany(
     errors: [],
   };
 
-  // JobSpy fallback when TheirStack returns <= 1 job for a monitored company.
+  const { careersUrl, jobPortalUrl } = careersUrlsFor(company);
+  const lowCoverage = theirStackJobs.length <= LOW_COVERAGE_THRESHOLD;
+
+  // Direct careers-portal source: try first when TheirStack is thin and the
+  // company has a careers/ATS URL. No API key required.
+  let careersJobs: CareersPortalJob[] = [];
+  if (lowCoverage && (careersUrl || jobPortalUrl)) {
+    report.careers_portal_attempted = true;
+    try {
+      const portal = await fetchCareersPortalJobs({
+        companyName: company.name,
+        companyId: company.id,
+        careersUrl: careersUrl ?? jobPortalUrl ?? "",
+        jobPortalUrl,
+      });
+      careersJobs = portal.jobs;
+      report.careers_portal_jobs = portal.jobs.length;
+      if (portal.jobs.length === 0 && portal.reason) {
+        report.careers_portal_reason = portal.reason;
+      }
+    } catch (err) {
+      // Provider is best-effort; never let it abort the run.
+      report.careers_portal_reason = "careers_portal_failed";
+      report.errors.push(
+        `careers_portal_failed: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  // JobSpy fallback when both TheirStack and the careers portal come up thin.
   let jobspyTitles: Array<{ title: string; description: string }> = [];
-  if (theirStackJobs.length <= 1) {
+  if (lowCoverage && careersJobs.length === 0) {
     report.jobspy_fallback = true;
     try {
       const fallback = await fetchJobSpyJobs(company.name);
@@ -139,7 +222,12 @@ async function refreshCompany(
   }
 
   const { theirstack: deduped } = dedupeJobs(theirStackJobs, jobspyTitles, company.name);
-  report.merged = deduped.length;
+  // Merge careers-portal jobs in, skipping titles already covered by TheirStack.
+  const theirstackTitles = new Set(deduped.map((j) => j.title.toLowerCase().trim()));
+  const careersDeduped = careersJobs.filter(
+    (j) => !theirstackTitles.has(j.title.toLowerCase().trim())
+  );
+  report.merged = deduped.length + careersDeduped.length;
 
   if (dryRun || !supabase) {
     return report;
@@ -148,7 +236,8 @@ async function refreshCompany(
   const companyContext = [company.industry, company.description, company.domain]
     .filter(Boolean)
     .join(" ");
-  const seenExternalIds: string[] = [];
+  const seenTheirStackIds: string[] = [];
+  const seenCareersIds: string[] = [];
 
   for (const job of deduped) {
     const roleMapped = mapJobToRole(job);
@@ -174,34 +263,85 @@ async function refreshCompany(
       continue;
     }
     report.upserted += 1;
-    seenExternalIds.push(job.external_id);
+    seenTheirStackIds.push(job.external_id);
   }
 
-  // Mark roles no longer present in the latest TheirStack pull as inactive,
-  // but only for TheirStack-sourced rows so we never clobber manual/other data.
-  if (seenExternalIds.length > 0) {
-    const { data: stale, error: staleErr } = await supabase
-      .from("roles")
-      .select("id,external_id")
-      .eq("company_id", company.id)
-      .eq("source", "theirstack")
-      .eq("is_active", true);
-    if (!staleErr && stale) {
-      const toDeactivate = (stale as Array<{ id: string; external_id: string | null }>)
-        .filter((r) => r.external_id && !seenExternalIds.includes(r.external_id))
-        .map((r) => r.id);
-      for (const id of toDeactivate) {
-        const { error: deErr } = await supabase
-          .from("roles")
-          .update({ is_active: false, last_checked_at: new Date().toISOString() })
-          .eq("id", id);
-        if (deErr) report.errors.push(`deactivate failed (${id}): ${deErr.message}`);
-        else report.deactivated += 1;
-      }
+  for (const job of careersDeduped) {
+    const roleMapped = mapCareersPortalJobToRole(job);
+    const roleCategory = classifyRoleCategory(job.title, null);
+    const domainCategory = classifyDomainCategory(job.title, null, companyContext);
+    const { error } = await supabase.from("roles").upsert(
+      {
+        ...roleMapped,
+        company_id: company.id,
+        role_category: roleCategory,
+        domain_category: domainCategory,
+        is_active: true,
+        last_checked_at: new Date().toISOString(),
+      },
+      { onConflict: "company_id,external_id" }
+    );
+    if (error) {
+      report.errors.push(
+        `careers role upsert failed (${job.external_id}): ${error.message}`
+      );
+      continue;
     }
+    report.upserted += 1;
+    seenCareersIds.push(job.external_id);
   }
+
+  // Deactivate stale rows per-source so a thin pull from one source never
+  // clobbers rows owned by the other (or by manual entry).
+  report.deactivated += await deactivateStale(
+    supabase,
+    company.id,
+    "theirstack",
+    seenTheirStackIds,
+    report
+  );
+  report.deactivated += await deactivateStale(
+    supabase,
+    company.id,
+    "careers_portal",
+    seenCareersIds,
+    report
+  );
 
   return report;
+}
+
+// Mark active rows for one source whose external_id is absent from the latest
+// pull as inactive. Skips deactivation entirely when the latest pull is empty
+// (a transient fetch failure should not wipe previously-found roles).
+async function deactivateStale(
+  supabase: NonNullable<ReturnType<typeof createFeedAdminClient>>,
+  companyId: string,
+  source: string,
+  seenExternalIds: string[],
+  report: RefreshCompanyReport
+): Promise<number> {
+  if (seenExternalIds.length === 0) return 0;
+  const { data: stale, error: staleErr } = await supabase
+    .from("roles")
+    .select("id,external_id")
+    .eq("company_id", companyId)
+    .eq("source", source)
+    .eq("is_active", true);
+  if (staleErr || !stale) return 0;
+  const toDeactivate = (stale as Array<{ id: string; external_id: string | null }>)
+    .filter((r) => r.external_id && !seenExternalIds.includes(r.external_id))
+    .map((r) => r.id);
+  let count = 0;
+  for (const id of toDeactivate) {
+    const { error: deErr } = await supabase
+      .from("roles")
+      .update({ is_active: false, last_checked_at: new Date().toISOString() })
+      .eq("id", id);
+    if (deErr) report.errors.push(`deactivate failed (${id}): ${deErr.message}`);
+    else count += 1;
+  }
+  return count;
 }
 
 async function handle(req: NextRequest): Promise<NextResponse> {
@@ -223,9 +363,13 @@ async function handle(req: NextRequest): Promise<NextResponse> {
   const report: RefreshReport = {
     dryRun,
     theirstack_configured: client.config.configured,
+    careers_portal_available: true,
     jobspy_configured: Boolean(process.env.JOBSPY_ENDPOINT),
     monitored_companies: 0,
     companies: [],
+    total_theirstack: 0,
+    total_careers_portal: 0,
+    total_jobspy: 0,
     total_upserted: 0,
     total_deactivated: 0,
     errors: [],
@@ -265,6 +409,9 @@ async function handle(req: NextRequest): Promise<NextResponse> {
 
     const companyReport = await refreshCompany(company, theirStackJobs, dryRun, supabase);
     report.companies.push(companyReport);
+    report.total_theirstack += companyReport.theirstack_jobs;
+    report.total_careers_portal += companyReport.careers_portal_jobs;
+    report.total_jobspy += companyReport.jobspy_jobs;
     report.total_upserted += companyReport.upserted;
     report.total_deactivated += companyReport.deactivated;
   }

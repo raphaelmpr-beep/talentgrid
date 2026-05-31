@@ -32,6 +32,17 @@ export type {
   RevenueEstimate,
 } from "./enrichment";
 
+export {
+  fetchCareersPortalJobs,
+  extractJobsFromHtml,
+} from "./careers-portal";
+export type {
+  CareersPortalInput,
+  CareersPortalJob,
+  CareersPortalResult,
+  CareersPortalOptions,
+} from "./careers-portal";
+
 export { fetchWikipediaRevenue, parseInfoboxRevenueValue } from "./wikipedia";
 export type {
   WikipediaLookupInput,

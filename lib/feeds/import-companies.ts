@@ -112,6 +112,14 @@ export const companyImportSchema = z
     country: z.string().trim().min(1).nullish(),
     website_url: z.string().trim().min(1).nullish(),
     careers_url: z.string().trim().min(1).nullish(),
+    // Direct careers/ATS portal metadata from the seed file. `job_portal_url`
+    // is the ATS-hosted listing page (when distinct from careers_url);
+    // `career_url_validation` records how the URL was checked; and
+    // `company_job_source` describes the resolved source path the careers-portal
+    // provider should follow. Stored verbatim as nested objects.
+    job_portal_url: z.string().trim().min(1).nullish(),
+    career_url_validation: z.record(z.unknown()).nullish(),
+    company_job_source: z.record(z.unknown()).nullish(),
     ats_type: z.string().trim().min(1).nullish(),
     ats_slug: z.string().trim().min(1).nullish(),
     source_status: z.string().trim().min(1).nullish(),
@@ -148,6 +156,57 @@ export function normalizeName(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+// Hosts that belong to ATS/job-board vendors rather than the company itself.
+// Deriving a company `domain` from a careers URL pointing at one of these would
+// be wrong (it would collide many companies onto e.g. "greenhouse.io"), so we
+// refuse to derive a domain from them and only keep the URL in metadata.
+const VENDOR_HOST_SUFFIXES = [
+  "greenhouse.io",
+  "boards.greenhouse.io",
+  "lever.co",
+  "jobs.lever.co",
+  "myworkdayjobs.com",
+  "workday.com",
+  "ashbyhq.com",
+  "jobs.ashbyhq.com",
+  "smartrecruiters.com",
+  "icims.com",
+  "taleo.net",
+  "successfactors.com",
+  "bamboohr.com",
+  "workable.com",
+  "jobvite.com",
+  "recruitee.com",
+  "breezy.hr",
+  "applytojob.com",
+  "jazz.co",
+  "jazzhr.com",
+  "linkedin.com",
+  "indeed.com",
+  "google.com",
+  "bing.com",
+];
+
+export function isVendorHost(domain: string | null | undefined): boolean {
+  if (!domain) return false;
+  const d = domain.toLowerCase();
+  return VENDOR_HOST_SUFFIXES.some((s) => d === s || d.endsWith(`.${s}`));
+}
+
+// Derive a company domain from a careers/website URL only when it is safe:
+// the URL must parse to a real host that is not an ATS/job-board vendor host.
+// Returns null when no safe domain can be derived (caller then preserves
+// metadata without touching `companies.domain`).
+export function deriveCompanyDomain(
+  ...candidates: Array<string | null | undefined>
+): string | null {
+  for (const candidate of candidates) {
+    const domain = normalizeDomain(candidate);
+    if (domain && !isVendorHost(domain)) return domain;
+  }
+  return null;
+}
+
 // Deep-merge metadata so a re-import never drops keys an enrichment pass wrote.
 // Incoming values win for scalar collisions, but objects merge recursively and
 // existing keys absent from the incoming patch are preserved.
@@ -180,6 +239,9 @@ export function buildMetadataPatch(input: CompanyImportInput): Record<string, un
     ["country", input.country],
     ["website_url", input.website_url],
     ["careers_url", input.careers_url],
+    ["job_portal_url", input.job_portal_url],
+    ["career_url_validation", input.career_url_validation],
+    ["company_job_source", input.company_job_source],
     ["ats_type", input.ats_type],
     ["ats_slug", input.ats_slug],
     ["source_status", input.source_status],
@@ -309,7 +371,9 @@ export async function importCompany(
   supabase: CompaniesClient,
   options: { dryRun: boolean }
 ): Promise<CompanyImportResult> {
-  const domain = normalizeDomain(input.domain ?? input.website_url ?? input.website);
+  const domain =
+    normalizeDomain(input.domain ?? input.website_url ?? input.website) ??
+    deriveCompanyDomain(input.careers_url, input.job_portal_url);
   const name = input.name.trim();
 
   const { company: existing, error: lookupErr } = await findExisting(
@@ -408,7 +472,9 @@ export async function importCompanies(
   const seenNames = new Set<string>();
 
   for (const input of inputs) {
-    const domain = normalizeDomain(input.domain ?? input.website_url ?? input.website);
+    const domain =
+      normalizeDomain(input.domain ?? input.website_url ?? input.website) ??
+      deriveCompanyDomain(input.careers_url, input.job_portal_url);
     const nameKey = normalizeName(input.name);
     const seen = domain ? seenDomains.has(domain) : seenNames.has(nameKey);
     if (seen) {

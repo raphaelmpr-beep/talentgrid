@@ -32,6 +32,16 @@ export async function GET() {
         missing: enrichment.missing,
         meta: enrichment.meta,
       },
+      // Direct careers-portal source needs no API key: it fetches each
+      // company's own careers/ATS URL stored in companies.metadata. Always
+      // available; per-company effectiveness depends on the portal being
+      // server-rendered (JS-only SPAs fail closed).
+      careers_portal: {
+        configured: true,
+        requires_key: false,
+        missing: [],
+        meta: { note: "fetches company careers_url / job_portal_url; no API key required" },
+      },
     },
     queues: {
       configured: redis.configured,
