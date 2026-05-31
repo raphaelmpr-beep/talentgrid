@@ -55,6 +55,33 @@ export type CountDiagnostics = {
   applied_domain_filters: string[];
 };
 
+export type DisplayCountType =
+  | "total_active_openings"
+  | "filtered_matching_openings"
+  | "source_count_unavailable";
+
+export type SourceInventoryStatus =
+  | "exact_api_count"
+  | "exact_stored_jobs_count"
+  | "non_exact_html_withheld"
+  | "source_unavailable"
+  | "source_not_validated"
+  | "source_stale"
+  | "fetch_failed";
+
+export type FilterDiagnostics = {
+  has_active_filters: boolean;
+  role_filter_applied: boolean;
+  domain_filter_applied: boolean;
+  revenue_filter_applied: boolean;
+  search_filter_applied: boolean;
+  matching_job_count: number;
+  total_active_job_count: number;
+  count_is_filtered: boolean;
+  filtered_out_openings_count: number | null;
+  ignored_filters: string[];
+};
+
 export type CompanyResult = {
   id: string;
   name: string;
@@ -102,5 +129,16 @@ export type CompanyResult = {
   indeedEstimate?: number;
   confidence?: "confirmed" | "enhanced" | "low";
   count_diagnostics?: CountDiagnostics;
+  // Contract-named, backend-owned count fields (top level per company). The UI
+  // reads these directly and never infers a count type or recomputes a count.
+  exact_source_total?: number | null;
+  exact_source_total_persisted?: boolean;
+  exact_source_total_last_seen_at?: string | null;
+  display_count?: number;
+  display_count_type?: DisplayCountType;
+  source_inventory_status?: SourceInventoryStatus;
+  source_inventory_reason?: string | null;
+  source_count_method?: string;
+  filter_diagnostics?: FilterDiagnostics;
   created_at: string;
 };

@@ -16,7 +16,9 @@ import {
 } from "@/lib/companies/revenue-filter";
 import {
   deriveCountDiagnostics,
+  toCompanyCountContract,
   type CountDiagnostics,
+  type CompanyCountContract,
 } from "@/lib/companies/count-diagnostics";
 
 export const runtime = "nodejs";
@@ -502,6 +504,15 @@ function isSourceOpeningsExact(
   return metadata?.["source_openings_exact"] === true;
 }
 
+// When was the persisted source inventory last refreshed by the cron. Surfaced
+// so the card can show staleness for an exact source total.
+function getSourceOpeningsCheckedAt(
+  metadata: Record<string, unknown> | null | undefined
+): string | null {
+  const raw = metadata?.["source_openings_checked_at"];
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
+
 function getCompanyRevenue(metadata: Record<string, unknown> | null | undefined): number | null {
   const m = metadata ?? {};
   const annual = parseNumericValue(m["annual_revenue"]);
@@ -723,6 +734,7 @@ type ValidatedCompany = AggregatedCompany & {
   indeedEstimate?: number;
   confidence?: "confirmed" | "enhanced" | "low";
   count_diagnostics?: CountDiagnostics;
+  count_contract?: CompanyCountContract;
 };
 
 function readBoolFlag(
@@ -1970,6 +1982,23 @@ export async function GET(req: NextRequest) {
   // counts are the ones diagnosed.
   const appliedRoleFilters = effectiveRole ? [effectiveRole] : [];
   const appliedDomainFilters = effectiveDomain ? [effectiveDomain] : [];
+  // Which opening-narrowing filters are active for this request. A revenue
+  // filter scopes the company universe but never narrows a matched company's
+  // openings, so it is tracked separately and excluded from count_is_filtered.
+  const roleFilterApplied = Boolean(effectiveRole);
+  const domainFilterApplied = Boolean(effectiveDomain);
+  const searchFilterApplied = Boolean(isCompanyScopedSearch ? false : freeText);
+  const revenueFilterApplied = Boolean(
+    revenueCategory ||
+      revenueBand ||
+      typeof minRevenue === "number" ||
+      typeof maxRevenue === "number"
+  );
+  const anyFilterApplied =
+    roleFilterApplied ||
+    domainFilterApplied ||
+    searchFilterApplied ||
+    revenueFilterApplied;
   const filtersActiveForCounts = Boolean(
     effectiveRole || effectiveDomain || (isCompanyScopedSearch ? false : freeText)
   );
@@ -1990,7 +2019,42 @@ export async function GET(req: NextRequest) {
       appliedRoleFilters,
       appliedDomainFilters,
     });
-    return { ...company, count_diagnostics };
+    // Project the internal diagnostics + the route's centralised displayed
+    // counts onto the contract's top-level field names. The activeOpeningsTotal
+    // and matchingCount here are exactly the cap-resolved counts already on the
+    // card — this only labels them, it does not recompute a count.
+    const activeOpeningsTotal = company.active_openings_total ?? matchingCount;
+    const exactPersisted =
+      resolved.exactTotal !== null && isSourceOpeningsExact(company.metadata);
+    const count_contract = toCompanyCountContract({
+      diagnostics: count_diagnostics,
+      activeOpeningsTotal,
+      matchingCount,
+      exactPersisted,
+      exactLastSeenAt: getSourceOpeningsCheckedAt(company.metadata),
+      filtersActive: anyFilterApplied,
+      roleFilterApplied,
+      domainFilterApplied,
+      revenueFilterApplied,
+      searchFilterApplied,
+      ignoredFilters: [],
+    });
+    return {
+      ...company,
+      count_diagnostics,
+      count_contract,
+      // Contract-named top-level fields. The frontend reads these directly and
+      // never infers a count type or recomputes an active count.
+      exact_source_total: count_contract.exact_source_total,
+      exact_source_total_persisted: count_contract.exact_source_total_persisted,
+      exact_source_total_last_seen_at: count_contract.exact_source_total_last_seen_at,
+      display_count: count_contract.display_count,
+      display_count_type: count_contract.display_count_type,
+      source_inventory_status: count_contract.source_inventory_status,
+      source_inventory_reason: count_contract.source_inventory_reason,
+      source_count_method: count_contract.source_count_method,
+      filter_diagnostics: count_contract.filter_diagnostics,
+    };
   });
   console.log("Companies returned:", diagnosed.length);
 
@@ -2025,6 +2089,16 @@ export async function GET(req: NextRequest) {
     applied_role_filters: appliedRoleFilters,
     applied_domain_filters: appliedDomainFilters,
     filters_affect_counts: filtersActiveForCounts,
+    // Response-level filter diagnostics mirroring the per-company
+    // filter_diagnostics object, so a caller can read which filter classes were
+    // applied for the whole request without scanning every card.
+    filter_diagnostics: {
+      has_active_filters: anyFilterApplied,
+      role_filter_applied: roleFilterApplied,
+      domain_filter_applied: domainFilterApplied,
+      revenue_filter_applied: revenueFilterApplied,
+      search_filter_applied: searchFilterApplied,
+    },
   };
 
   const queryTimeMs = Date.now() - startedAt;

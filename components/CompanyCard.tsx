@@ -19,10 +19,41 @@ export function CompanyCard({
   );
   const revenueBand = company.revenue_band ?? company.revenueCategory;
   const latestSeen = formatRelative(company.latest_job_seen_at);
-  // Show the matching (filtered) count as a secondary metric only when filters
-  // are actually narrowing the set — i.e. there are active filters and the
-  // matching count differs from the total company inventory.
-  const showMatching = filtersActive && matchingCount !== totalCount;
+
+  // Count display is backend-owned: the API decides display_count and
+  // display_count_type so the UI never infers a count type or recomputes an
+  // active count. We render the exact phrasing the contract specifies for each
+  // state, falling back to the legacy total/matching split only when the
+  // contract fields are absent (e.g. a stale cached response).
+  const fd = company.filter_diagnostics;
+  const countIsFiltered = fd?.count_is_filtered ?? false;
+  const status = company.source_inventory_status;
+  const displayCount = company.display_count ?? totalCount;
+  const totalActive = fd?.total_active_job_count ?? totalCount;
+
+  const primaryLine = (() => {
+    if (status === "non_exact_html_withheld") {
+      return { value: null, label: "Careers page available" };
+    }
+    if (status === "fetch_failed" || status === "source_not_validated") {
+      return { value: null, label: "Job source needs validation" };
+    }
+    if (company.display_count_type === "filtered_matching_openings" || countIsFiltered) {
+      return { value: displayCount, label: "matching roles" };
+    }
+    return { value: displayCount, label: "open roles" };
+  })();
+
+  const subLine = (() => {
+    if (status === "non_exact_html_withheld") return "Exact job count not available yet";
+    if (countIsFiltered) return `${formatCompactNumber(totalActive)} total active openings`;
+    return null;
+  })();
+
+  const showCareersLink =
+    status === "non_exact_html_withheld" ||
+    status === "fetch_failed" ||
+    status === "source_not_validated";
 
   const diag = company.count_diagnostics;
   // The count-status indication shown on the card so a 0/low/capped count reads
@@ -85,13 +116,21 @@ export function CompanyCard({
             )}
           </div>
           <div className="shrink-0 text-right">
-            <div className="text-2xl font-semibold tabular-nums text-neutral-900">
-              {formatCompactNumber(totalCount)}
-            </div>
-            <p className="text-xs uppercase tracking-wide text-neutral-500">Total openings</p>
-            {showMatching && (
-              <p className="mt-0.5 text-xs font-medium text-emerald-700 tabular-nums">
-                {formatCompactNumber(matchingCount)} matching filters
+            {primaryLine.value !== null ? (
+              <>
+                <div className="text-2xl font-semibold tabular-nums text-neutral-900">
+                  {formatCompactNumber(primaryLine.value)}
+                </div>
+                <p className="text-xs uppercase tracking-wide text-neutral-500">
+                  {primaryLine.label}
+                </p>
+              </>
+            ) : (
+              <p className="text-sm font-medium text-neutral-700">{primaryLine.label}</p>
+            )}
+            {subLine && (
+              <p className="mt-0.5 text-xs font-medium text-neutral-500 tabular-nums">
+                {subLine}
               </p>
             )}
           </div>

@@ -180,3 +180,219 @@ export function deriveCountDiagnostics(input: CountDiagnosticsInput): CountDiagn
     applied_domain_filters: appliedDomainFilters,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Contract field projection
+// ---------------------------------------------------------------------------
+// The internal CountDiagnostics vocabulary above (count_display_mode,
+// validation_status, …) is stable and unit-tested. The company-card API
+// contract, however, names the same facts differently and expects them at the
+// top level of each company object so the frontend never has to infer a count
+// type or recompute an active count. This section projects the already-derived
+// diagnostics onto those contract field names. It adds no new source of truth —
+// it is a pure renaming/rollup of the values deriveCountDiagnostics produced.
+
+// How the displayed count should be read, per the API contract.
+//   total_active_openings     — count is the company's total active openings
+//   filtered_matching_openings — count is the subset matching active filters
+//   <validation/unavailable>  — no trustworthy count; mirrors source status
+export type DisplayCountType =
+  | "total_active_openings"
+  | "filtered_matching_openings"
+  | "source_count_unavailable";
+
+// The source-inventory status vocabulary the contract expects.
+export type SourceInventoryStatus =
+  | "exact_api_count"
+  | "exact_stored_jobs_count"
+  | "non_exact_html_withheld"
+  | "source_unavailable"
+  | "source_not_validated"
+  | "source_stale"
+  | "fetch_failed";
+
+export type FilterDiagnostics = {
+  has_active_filters: boolean;
+  role_filter_applied: boolean;
+  domain_filter_applied: boolean;
+  revenue_filter_applied: boolean;
+  search_filter_applied: boolean;
+  matching_job_count: number;
+  total_active_job_count: number;
+  count_is_filtered: boolean;
+  filtered_out_openings_count: number | null;
+  ignored_filters: string[];
+};
+
+// The top-level, contract-named diagnostic fields for one company card.
+export type CompanyCountContract = {
+  exact_source_total: number | null;
+  exact_source_total_persisted: boolean;
+  exact_source_total_last_seen_at: string | null;
+  active_openings_total: number;
+  active_openings_matching_filters: number;
+  display_count: number;
+  display_count_type: DisplayCountType;
+  source_inventory_status: SourceInventoryStatus;
+  source_inventory_reason: string | null;
+  source_count_method: string;
+  filter_diagnostics: FilterDiagnostics;
+};
+
+// Map the coarse validation_status / count_display_mode onto the contract's
+// source_inventory_status enum. Blocked statuses split into the specific
+// fetch-failure vs. unavailable vs. not-validated states the contract names.
+function toSourceInventoryStatus(
+  d: CountDiagnostics
+): SourceInventoryStatus {
+  if (d.source_openings_exact) return "exact_api_count";
+  switch (d.validation_status) {
+    case "non_exact_sample":
+      return "non_exact_html_withheld";
+    case "pending":
+      return "source_not_validated";
+    case "blocked":
+      switch (d.source_status) {
+        case "captcha_or_bot_challenge":
+        case "validation_failed":
+          return "fetch_failed";
+        case "needs_source_mapping":
+        case "no_source_url":
+        case "portal_accessible_but_roles_not_counted":
+          return "source_unavailable";
+        default:
+          return "source_unavailable";
+      }
+    case "exact":
+      return "exact_api_count";
+    default:
+      // No source signal at all: if we have real stored rows the count is an
+      // exact stored-jobs count; otherwise the source has not been validated.
+      return d.deduped_role_rows_count > 0
+        ? "exact_stored_jobs_count"
+        : "source_not_validated";
+  }
+}
+
+// A short human/debug reason for the inventory status, reusing the persisted
+// source_status when present so the UI can show *why* a count is withheld.
+function toSourceInventoryReason(
+  d: CountDiagnostics,
+  status: SourceInventoryStatus
+): string | null {
+  if (d.source_status) return d.source_status;
+  switch (status) {
+    case "exact_api_count":
+      return "counted_from_validated_source";
+    case "exact_stored_jobs_count":
+      return "counted_from_stored_active_jobs";
+    case "source_not_validated":
+      return "source_not_validated";
+    default:
+      return null;
+  }
+}
+
+// How the count was produced, for transparency in the response.
+function toSourceCountMethod(status: SourceInventoryStatus): string {
+  switch (status) {
+    case "exact_api_count":
+      return "validated_source_total";
+    case "exact_stored_jobs_count":
+      return "stored_active_jobs";
+    case "non_exact_html_withheld":
+      return "html_sample_withheld";
+    case "source_not_validated":
+      return "none_pending_validation";
+    case "fetch_failed":
+      return "none_fetch_failed";
+    case "source_stale":
+      return "stale_source";
+    case "source_unavailable":
+    default:
+      return "none_source_unavailable";
+  }
+}
+
+// Project the internal diagnostics + the resolved displayed counts onto the
+// contract's top-level fields. activeOpeningsTotal / matchingCount come from the
+// route's centralised cap rule (resolveDisplayedCounts) — the single source of
+// truth for displayed counts — so this never recomputes a count, only labels it.
+export function toCompanyCountContract(input: {
+  diagnostics: CountDiagnostics;
+  activeOpeningsTotal: number;
+  matchingCount: number;
+  exactPersisted: boolean;
+  exactLastSeenAt: string | null;
+  filtersActive: boolean;
+  roleFilterApplied: boolean;
+  domainFilterApplied: boolean;
+  revenueFilterApplied: boolean;
+  searchFilterApplied: boolean;
+  ignoredFilters: string[];
+}): CompanyCountContract {
+  const {
+    diagnostics: d,
+    activeOpeningsTotal,
+    matchingCount,
+    exactPersisted,
+    exactLastSeenAt,
+    filtersActive,
+    roleFilterApplied,
+    domainFilterApplied,
+    revenueFilterApplied,
+    searchFilterApplied,
+    ignoredFilters,
+  } = input;
+
+  const sourceInventoryStatus = toSourceInventoryStatus(d);
+  const hasTrustworthyCount =
+    sourceInventoryStatus === "exact_api_count" ||
+    sourceInventoryStatus === "exact_stored_jobs_count";
+
+  // Only role/domain/search filters narrow the per-company opening set; a
+  // revenue filter scopes the company universe but does not reduce a matched
+  // company's openings, so it must not flip count_is_filtered on its own.
+  const openingFiltersActive =
+    roleFilterApplied || domainFilterApplied || searchFilterApplied;
+  const countIsFiltered = openingFiltersActive && matchingCount !== activeOpeningsTotal;
+
+  let displayCount: number;
+  let displayCountType: DisplayCountType;
+  if (!hasTrustworthyCount && activeOpeningsTotal === 0 && matchingCount === 0) {
+    displayCount = 0;
+    displayCountType = "source_count_unavailable";
+  } else if (countIsFiltered) {
+    displayCount = matchingCount;
+    displayCountType = "filtered_matching_openings";
+  } else {
+    displayCount = activeOpeningsTotal;
+    displayCountType = "total_active_openings";
+  }
+
+  return {
+    exact_source_total: d.source_openings_exact ? d.total_source_openings : null,
+    exact_source_total_persisted: exactPersisted,
+    exact_source_total_last_seen_at: exactLastSeenAt,
+    active_openings_total: activeOpeningsTotal,
+    active_openings_matching_filters: matchingCount,
+    display_count: displayCount,
+    display_count_type: displayCountType,
+    source_inventory_status: sourceInventoryStatus,
+    source_inventory_reason: toSourceInventoryReason(d, sourceInventoryStatus),
+    source_count_method: toSourceCountMethod(sourceInventoryStatus),
+    filter_diagnostics: {
+      has_active_filters: filtersActive,
+      role_filter_applied: roleFilterApplied,
+      domain_filter_applied: domainFilterApplied,
+      revenue_filter_applied: revenueFilterApplied,
+      search_filter_applied: searchFilterApplied,
+      matching_job_count: matchingCount,
+      total_active_job_count: activeOpeningsTotal,
+      count_is_filtered: countIsFiltered,
+      filtered_out_openings_count:
+        countIsFiltered ? Math.max(0, activeOpeningsTotal - matchingCount) : null,
+      ignored_filters: ignoredFilters,
+    },
+  };
+}
