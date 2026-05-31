@@ -8,6 +8,8 @@ export const runtime = "nodejs";
 type RoleRow = {
   id?: string | null;
   company_id: string | null;
+  external_id?: string | null;
+  source?: string | null;
   title?: string | null;
   description?: string | null;
   location?: string | null;
@@ -224,6 +226,74 @@ function revenueBandToCategoryKey(band: string | null | undefined): RevenueCateg
 
 function asLowerText(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+// Extract the Greenhouse job id (gh_jid) from any URL that carries it — either as
+// a query param (`?gh_jid=7863290`, used by company-hosted boards that embed
+// Greenhouse, e.g. pinterestcareers.com) or as a path segment on a native
+// greenhouse.io board (`/jobs/7863290`, `/embed/job_app?for=slug&token=7863290`).
+// Returns the bare numeric id so the same opening surfaced via two different URL
+// shapes collapses to one canonical identity.
+function extractGreenhouseJobId(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+
+  const queryGhJid =
+    parsed.searchParams.get("gh_jid") ?? parsed.searchParams.get("token");
+  if (queryGhJid && /^\d+$/.test(queryGhJid)) return queryGhJid;
+
+  if (parsed.hostname.toLowerCase().endsWith("greenhouse.io")) {
+    // Last all-numeric path segment is the job id on native Greenhouse boards.
+    const numericSegments = parsed.pathname
+      .split("/")
+      .filter((part) => /^\d+$/.test(part));
+    if (numericSegments.length > 0) return numericSegments[numericSegments.length - 1];
+  }
+
+  return null;
+}
+
+// Normalise a job URL down to a stable key: drop tracking/query noise and the
+// trailing slash so the same posting linked with different query strings maps to
+// one identity. When a Greenhouse job id is present it wins outright.
+function normalizeJobUrl(url: string): string | null {
+  const ghId = extractGreenhouseJobId(url);
+  if (ghId) return `gh:${ghId}`;
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname.replace(/\/+$/, "");
+    return `${parsed.hostname.toLowerCase()}${path}`.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+// Derive a canonical identity for a role so duplicate rows for the same real
+// opening (a stale legacy row alongside the freshly-refreshed source row, or two
+// duplicate company_ids carrying the same posting) collapse to one count.
+// Priority: explicit source identity (external_id / metadata source ids) →
+// normalised URL (Greenhouse gh_jid aware) → company-scoped title fallback.
+function canonicalRoleKey(role: RoleRow, companyKey: string): string {
+  const metadata = role.metadata ?? {};
+  const metaId =
+    asLowerText(metadata["external_id"]) ||
+    asLowerText(metadata["source_id"]) ||
+    asLowerText(metadata["gh_jid"]);
+  if (metaId) return `ext:${metaId}`;
+
+  const externalId = asLowerText(role.external_id);
+  if (externalId) return `ext:${externalId}`;
+
+  if (role.url) {
+    const normalizedUrl = normalizeJobUrl(role.url);
+    if (normalizedUrl) return `url:${normalizedUrl}`;
+  }
+
+  return `title:${companyKey}::${asLowerText(role.title)}`;
 }
 
 function parseNumericValue(value: unknown): number | null {
@@ -547,17 +617,21 @@ function groupByCompany(
       }));
 
       const matchingCount = entry.jobs.length;
-      const totalActive = totalActiveByCompany?.get(entry.id);
-      // Total company openings: prefer the authoritative live inventory the cron
-      // persisted from the ATS board (the number the careers site shows), then
-      // fall back to active role rows, then to the matching set. This is what the
-      // card surfaces prominently; matchingCount stays as the filtered metric.
+      // Totals are keyed by canonical company name (duplicate company_ids for the
+      // same company are already collapsed upstream into one deduped count).
+      const totalActive = totalActiveByCompany?.get(normalizeKeyPart(entry.company));
+      // Total company openings: when the cron has persisted the authoritative live
+      // inventory from the ATS board (the number the careers site shows, e.g.
+      // Pinterest 176) that value is the source of truth and wins outright — it is
+      // *not* combined with role-row counts, which can include stale legacy
+      // duplicates that survived past refreshes. Only when no source total exists
+      // do we fall back to the deduped active role count, then the matching set.
       const sourceTotal = getSourceOpeningsTotal(entry.metadata);
-      const activeOpeningsTotal = Math.max(
-        sourceTotal ?? 0,
-        totalActive?.count ?? 0,
-        matchingCount
-      );
+      const dedupedActive = totalActive?.count ?? 0;
+      const activeOpeningsTotal =
+        sourceTotal !== null
+          ? sourceTotal
+          : Math.max(dedupedActive, matchingCount);
       const latestFromJobs = entry.jobs.reduce<string | null>((latest, job) => {
         const ts = job.posted_at ?? job.createdAt;
         if (!ts) return latest;
@@ -1381,7 +1455,7 @@ export async function GET(req: NextRequest) {
   const scopedCompanyIds = revenueScopedCompanies.map((company) => company.id);
   const { data: roleRows, error: rolesErr } = await fetchAllActiveRoles(
     supabase,
-    "id,company_id,title,description,location,remote,employment_type,seniority,salary_min,salary_max,url,ghost_score,posted_at,created_at,metadata",
+    "id,company_id,external_id,source,title,description,location,remote,employment_type,seniority,salary_min,salary_max,url,ghost_score,posted_at,created_at,metadata",
     scopedCompanyIds
   );
 
@@ -1389,27 +1463,51 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: rolesErr.message }, { status: 500 });
   }
 
+  const companyById = new Map(revenueScopedCompanies.map((company) => [company.id, company]));
+  const companyByName = new Map(
+    revenueScopedCompanies.map((company) => [normalizeKeyPart(company.name), company])
+  );
+
+  // Resolve each role's company name so duplicate company_ids for the same
+  // company collapse to one identity. Roles whose company_id isn't in scope (or
+  // is missing) are dropped — they can't be attributed to a displayed company.
+  const companyNameById = new Map(
+    revenueScopedCompanies.map((company) => [company.id, normalizeKeyPart(company.name)])
+  );
+
+  // Dedupe active roles by canonical job identity, scoped to the company *name*
+  // (not company_id) so a stale legacy row and the freshly-refreshed source row
+  // for the same opening — even under different duplicate company_ids — count
+  // once. The first row seen per identity wins; rows are pre-sorted newest-first
+  // below per company, but for the dedup pass we keep insertion order and let the
+  // canonical key collapse the rest. Totals are then keyed by company name to
+  // match how groupByCompany aggregates.
   const rolesByCompany = new Map<string, RoleRow[]>();
   const totalActiveByCompany = new Map<string, { count: number; latestSeenAt: string | null }>();
+  const seenCanonicalByName = new Map<string, Set<string>>();
   for (const roleRow of roleRows ?? []) {
     if (!roleRow.company_id) continue;
+    const companyKey = companyNameById.get(roleRow.company_id);
+    if (!companyKey) continue;
+
+    const canonical = canonicalRoleKey(roleRow, companyKey);
+    const seen = seenCanonicalByName.get(companyKey) ?? new Set<string>();
+    if (seen.has(canonical)) continue;
+    seen.add(canonical);
+    seenCanonicalByName.set(companyKey, seen);
+
     const bucket = rolesByCompany.get(roleRow.company_id) ?? [];
     bucket.push(roleRow);
     rolesByCompany.set(roleRow.company_id, bucket);
 
-    const agg = totalActiveByCompany.get(roleRow.company_id) ?? { count: 0, latestSeenAt: null };
+    const agg = totalActiveByCompany.get(companyKey) ?? { count: 0, latestSeenAt: null };
     agg.count += 1;
     const seenAt = roleRow.posted_at ?? roleRow.created_at ?? null;
     if (seenAt && (!agg.latestSeenAt || Date.parse(seenAt) > Date.parse(agg.latestSeenAt))) {
       agg.latestSeenAt = seenAt;
     }
-    totalActiveByCompany.set(roleRow.company_id, agg);
+    totalActiveByCompany.set(companyKey, agg);
   }
-
-  const companyById = new Map(revenueScopedCompanies.map((company) => [company.id, company]));
-  const companyByName = new Map(
-    revenueScopedCompanies.map((company) => [normalizeKeyPart(company.name), company])
-  );
 
   const primaryJobs: GroupedJob[] = [];
   for (const company of revenueScopedCompanies) {
