@@ -44,8 +44,13 @@ type RefreshCompanyReport = {
   // True when the ATS board was inferred from a legacy company's existing role
   // URLs (no stored careers metadata). Surfaces the repair path in the report.
   careers_portal_inferred?: boolean;
-  // Resolved source path: "greenhouse" | "lever" | "html" | "json".
+  // Resolved source path: "greenhouse" | "lever" | "workday" | "html" | "json".
   careers_portal_source?: string;
+  // True when careers_portal_total is the vendor-reported exact live inventory
+  // (a public ATS board API). False when it is a best-effort HTML/JSON scrape
+  // sample that may undercount — surfaced so a dry-run can distinguish an
+  // authoritative count (e.g. Pinterest 176) from a shallow fallback.
+  careers_portal_count_exact?: boolean;
   careers_portal_reason?: string;
   jobspy_fallback: boolean;
   jobspy_jobs: number;
@@ -169,6 +174,12 @@ function atsHintsFromRoleUrl(url: string): InferredAtsHints | null {
     if (slug) {
       return { careersUrl: url, jobPortalUrl: url, atsType: "lever", atsSlug: slug };
     }
+  }
+  // Workday: the candidate URL itself carries the tenant/site the provider needs
+  // to derive the CXS endpoint (resolveAtsBoard sniffs it), so hand the URL back
+  // verbatim. ats_type is recorded for the report; the slug is encoded in the URL.
+  if (host.endsWith("myworkdayjobs.com")) {
+    return { careersUrl: url, jobPortalUrl: url, atsType: "workday", atsSlug: null };
   }
   // A company-hosted careers page that embeds Greenhouse leaks a gh_jid marker.
   // We can't read the slug from it, but handing the URL to the provider lets its
@@ -428,9 +439,17 @@ async function refreshCompany(
       report.careers_portal_jobs = portal.jobs.length;
       report.careers_portal_total = portal.totalCount;
       report.careers_portal_source = portal.source;
+      report.careers_portal_count_exact = portal.countExact ?? false;
       resolvedCareersUrl = portal.fetchedUrl ?? careersUrl ?? jobPortalUrl;
       if (portal.jobs.length === 0 && portal.reason) {
         report.careers_portal_reason = portal.reason;
+      }
+      // A non-exact (scraped) count is a lower-bound sample, not the live total.
+      // Flag it in the report so a dry-run never presents a shallow HTML count as
+      // authoritative.
+      if (portal.totalCount > 0 && portal.countExact === false) {
+        report.careers_portal_reason =
+          report.careers_portal_reason ?? "scraped_sample_not_exact";
       }
     } catch (err) {
       // Provider is best-effort; never let it abort the run.
@@ -573,6 +592,10 @@ async function persistSourceTotal(
     ...prior,
     source_openings_total: report.careers_portal_total,
     source_openings_source: report.careers_portal_source ?? "careers_portal",
+    // Whether the persisted total is the vendor-reported exact live inventory
+    // (true) or a best-effort scrape sample (false). The companies API treats an
+    // exact total as the authoritative cap; a non-exact total is a lower bound.
+    source_openings_exact: report.careers_portal_count_exact ?? false,
     source_openings_checked_at: new Date().toISOString(),
   };
   // Backfill inferred careers/ATS pointers onto a legacy row so future loads and

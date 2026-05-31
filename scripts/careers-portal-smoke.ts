@@ -297,6 +297,72 @@ async function runFetchAssertions(): Promise<void> {
     assert(result.source !== "greenhouse", `does not claim greenhouse source (got ${result.source})`);
   }
 
+  console.log("fetchCareersPortalJobs: Workday CXS board paged to exact total");
+  {
+    // Workday's public CXS endpoint paginates: each POST returns `total` (the
+    // exact live inventory) plus up to `limit` postings. The provider must page
+    // through offset to the total and report the exact count, capping stored rows
+    // at maxJobs. Simulate a 250-posting board over 3 pages.
+    const TOTAL = 250;
+    const calls: string[] = [];
+    const stubFetch: FetchLike = async (url, init) => {
+      calls.push(String(url));
+      const bodyIn = init?.body ? JSON.parse(String(init.body)) : {};
+      const offset = Number(bodyIn.offset ?? 0);
+      const pageSize = Number(bodyIn.limit ?? 100);
+      const remaining = Math.max(0, TOTAL - offset);
+      const count = Math.min(pageSize, remaining);
+      const jobPostings = Array.from({ length: count }, (_, i) => ({
+        title: `WD Engineer ${offset + i}`,
+        externalPath: `/job/${offset + i}`,
+        locationsText: "Remote, US",
+      }));
+      return new Response(JSON.stringify({ total: TOTAL, jobPostings }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    };
+    const result = await fetchCareersPortalJobs(
+      {
+        companyName: "Workco",
+        careersUrl: "https://workco.wd5.myworkdayjobs.com/en-US/External",
+        maxJobs: 50,
+      },
+      { fetch: stubFetch }
+    );
+    assert(result.source === "workday", `reports workday source (got ${result.source})`);
+    assert(
+      calls[0] === "https://workco.wd5.myworkdayjobs.com/wday/cxs/workco/External/jobs",
+      `derives the CXS endpoint (got ${calls[0]})`
+    );
+    assert(result.totalCount === TOTAL, `reports exact live total ${TOTAL} (got ${result.totalCount})`);
+    assert(result.countExact === true, `marks workday count exact (got ${result.countExact})`);
+    assert(result.jobs.length === 50, `caps stored jobs at maxJobs 50 (got ${result.jobs.length})`);
+    assert(calls.length >= 3, `pages through the board (got ${calls.length} calls)`);
+    assert(
+      result.jobs[0]?.url === "https://workco.wd5.myworkdayjobs.com/job/0",
+      `resolves externalPath to absolute URL (got ${result.jobs[0]?.url})`
+    );
+  }
+
+  console.log("fetchCareersPortalJobs: scraped HTML count is marked non-exact");
+  {
+    const stubFetch: FetchLike = async () =>
+      new Response(ANCHOR_HTML, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8" },
+      });
+    const result = await fetchCareersPortalJobs(
+      { companyName: "Acme", careersUrl: BASE },
+      { fetch: stubFetch }
+    );
+    assert(result.source === "html", `html source (got ${result.source})`);
+    assert(
+      result.countExact === false,
+      `HTML scrape count is NOT marked exact (got ${result.countExact})`
+    );
+  }
+
   console.log("fetchCareersPortalJobs: ATS failure falls back to HTML scrape");
   {
     // Greenhouse API 404s, but the careers page is plain HTML with anchors.

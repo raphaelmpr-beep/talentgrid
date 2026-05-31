@@ -57,9 +57,14 @@ export type CareersPortalResult = {
   totalCount: number;
   // Which URL produced the jobs (careersUrl or jobPortalUrl), for debugging.
   fetchedUrl: string | null;
-  // Resolved source path actually used: "greenhouse" | "lever" | "html" |
-  // "json" etc. Lets the caller know whether the count is authoritative.
+  // Resolved source path actually used: "greenhouse" | "lever" | "workday" |
+  // "html" | "json" etc. Lets the caller know whether the count is authoritative.
   source?: string;
+  // True when totalCount is the vendor-reported exact live inventory (a public
+  // JSON board API: Greenhouse meta.total, Lever array length, Workday total).
+  // False/absent when the count is a best-effort sample from HTML/JSON scraping
+  // and may undercount. Lets the caller flag fallback counts as non-authoritative.
+  countExact?: boolean;
   // Non-fatal reason when no jobs were extracted (blocked, js_only, etc.).
   // Never contains secrets.
   reason?: string;
@@ -69,10 +74,13 @@ export type CareersPortalResult = {
 // and an exact total. Vendor JSON APIs are public, key-less, and return the
 // full board, so they are strongly preferred over HTML scraping.
 type AtsBoard = {
-  vendor: "greenhouse" | "lever";
+  vendor: "greenhouse" | "lever" | "workday";
   apiUrl: string;
   // Public page a candidate would land on, used as the base for relative URLs.
   baseUrl: string;
+  // Workday only: the cxs host (e.g. company.wd5.myworkdayjobs.com) used to
+  // resolve relative posting paths to absolute candidate URLs.
+  host?: string;
 };
 
 export type CareersPortalOptions = {
@@ -501,6 +509,46 @@ function leverSlugFromUrl(url: string): string | null {
   return null;
 }
 
+// Derive a Workday CXS board from a public Workday candidate URL of the shape
+//   https://{tenant}.{dc}.myworkdayjobs.com/{...}/{site}[/...]
+// The public, key-less CXS jobs endpoint is
+//   https://{tenant}.{dc}.myworkdayjobs.com/wday/cxs/{tenant}/{site}/jobs
+// which accepts a POST { limit, offset, searchText, appliedFacets } and returns
+// { total, jobPostings: [{ title, externalPath, locationsText }...] }. Paging
+// through `offset` to `total` yields the exact live inventory.
+function workdayBoardFromUrl(url: string): AtsBoard | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.toLowerCase();
+  if (!host.endsWith("myworkdayjobs.com")) return null;
+  // tenant is the left-most label of the host (company.wd5.myworkdayjobs.com).
+  const tenant = host.split(".")[0];
+  if (!tenant) return null;
+
+  // The site id is the path segment following an optional locale segment
+  // (e.g. /en-US/<site> or /<site>). Workday locale segments look like "en-US".
+  const parts = u.pathname.split("/").filter(Boolean);
+  const localeRe = /^[a-z]{2}-[A-Z]{2}$/;
+  let site: string | undefined;
+  for (const part of parts) {
+    if (localeRe.test(part)) continue;
+    site = part;
+    break;
+  }
+  if (!site) return null;
+
+  return {
+    vendor: "workday",
+    apiUrl: `https://${host}/wday/cxs/${encodeURIComponent(tenant)}/${encodeURIComponent(site)}/jobs`,
+    baseUrl: `https://${host}/${encodeURIComponent(site)}`,
+    host,
+  };
+}
+
 // Resolve which (if any) public ATS board API to call, from the explicit
 // ats_type/ats_slug hints first, then by sniffing the candidate URLs.
 function resolveAtsBoard(input: CareersPortalInput): AtsBoard | null {
@@ -521,6 +569,8 @@ function resolveAtsBoard(input: CareersPortalInput): AtsBoard | null {
       baseUrl: `https://jobs.lever.co/${encodeURIComponent(atsSlug)}`,
     };
   }
+  // Workday needs the full tenant/site/host, which the bare ats_slug can't carry
+  // — so it is resolved by sniffing the candidate URL below regardless of hint.
 
   // Otherwise sniff the URLs.
   for (const url of urls) {
@@ -534,6 +584,8 @@ function resolveAtsBoard(input: CareersPortalInput): AtsBoard | null {
         baseUrl: `https://jobs.lever.co/${encodeURIComponent(lvSlug)}`,
       };
     }
+    const wd = workdayBoardFromUrl(url);
+    if (wd) return wd;
   }
 
   return null;
@@ -678,6 +730,98 @@ function parseLeverBoard(
   return { jobs, total };
 }
 
+// One page of the Workday CXS jobs API. Workday paginates; a single response
+// carries `total` (exact live inventory) and up to `limit` postings, so we page
+// through `offset` to recover the full board while capping stored rows.
+const WORKDAY_PAGE_SIZE = 100;
+// Hard cap on Workday pages fetched per company so a pathological board can't
+// hang the per-company budget. 50 pages × 100 = 5000 postings of headroom; the
+// reported `total` is always exact regardless of how many pages we store.
+const WORKDAY_MAX_PAGES = 50;
+
+type WorkdayPosting = {
+  title?: unknown;
+  externalPath?: unknown;
+  locationsText?: unknown;
+  bulletFields?: unknown;
+};
+
+// Page through the Workday CXS jobs endpoint to the exact total. Best-effort and
+// non-fatal: returns null on the first failed/garbled page so the caller can
+// fall back to HTML. `total` is the vendor-reported live inventory.
+async function fetchWorkdayBoard(
+  board: AtsBoard,
+  maxJobs: number,
+  resolved: Required<Pick<CareersPortalOptions, "fetch" | "timeoutMs" | "userAgent" | "maxBytes">>
+): Promise<{ jobs: CareersPortalJob[]; total: number } | null> {
+  const jobs: CareersPortalJob[] = [];
+  let total = 0;
+  let offset = 0;
+  for (let page = 0; page < WORKDAY_MAX_PAGES; page++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), resolved.timeoutMs);
+    let bodyText: string;
+    try {
+      const res = await resolved.fetch(board.apiUrl, {
+        method: "POST",
+        redirect: "follow",
+        signal: controller.signal,
+        headers: {
+          "user-agent": resolved.userAgent,
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ limit: WORKDAY_PAGE_SIZE, offset, searchText: "", appliedFacets: {} }),
+      });
+      if (!res.ok) return page === 0 ? null : { jobs, total };
+      const raw = await res.text();
+      bodyText = raw.length > resolved.maxBytes ? raw.slice(0, resolved.maxBytes) : raw;
+    } catch {
+      return page === 0 ? null : { jobs, total };
+    } finally {
+      clearTimeout(timer);
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(bodyText);
+    } catch {
+      return page === 0 ? null : { jobs, total };
+    }
+    if (!parsed || typeof parsed !== "object") return page === 0 ? null : { jobs, total };
+    const root = parsed as Record<string, unknown>;
+    const list = Array.isArray(root.jobPostings)
+      ? (root.jobPostings as WorkdayPosting[])
+      : [];
+    const pageTotal = Number(root.total);
+    if (page === 0) total = Number.isFinite(pageTotal) ? pageTotal : list.length;
+
+    for (const item of list) {
+      const title = typeof item.title === "string" ? item.title.trim() : "";
+      if (title.length < MIN_TITLE_LEN) continue;
+      const path = typeof item.externalPath === "string" ? item.externalPath : null;
+      const url = path ? resolveUrl(path, `https://${board.host}`) : null;
+      const loc = typeof item.locationsText === "string" ? item.locationsText : null;
+      if (jobs.length < maxJobs) {
+        jobs.push({
+          external_id: makeExternalId(url, title),
+          title: title.slice(0, MAX_TITLE_LEN),
+          url,
+          location: loc,
+          source: "careers_portal",
+          source_url: board.baseUrl,
+        });
+      }
+    }
+
+    offset += WORKDAY_PAGE_SIZE;
+    // Stop once we've covered the reported total or the page came back short
+    // (defensive: a board that doesn't report total still terminates).
+    if (list.length === 0 || (total > 0 && offset >= total)) break;
+  }
+  return { jobs, total: total || jobs.length };
+}
+
 // Fetch + parse a resolved ATS board. Best-effort and non-fatal: returns null
 // on any failure so the caller can fall back to HTML scraping.
 async function fetchAtsBoard(
@@ -685,6 +829,9 @@ async function fetchAtsBoard(
   maxJobs: number,
   resolved: Required<Pick<CareersPortalOptions, "fetch" | "timeoutMs" | "userAgent" | "maxBytes">>
 ): Promise<{ jobs: CareersPortalJob[]; total: number } | null> {
+  if (board.vendor === "workday") {
+    return fetchWorkdayBoard(board, maxJobs, resolved);
+  }
   const fetched = await fetchBounded(board.apiUrl, resolved);
   if ("reason" in fetched) return null;
   if (board.vendor === "greenhouse") {
@@ -739,6 +886,8 @@ export async function fetchCareersPortalJobs(
         totalCount: result.total,
         fetchedUrl: board.apiUrl,
         source: board.vendor,
+        // A resolved public board API reports the exact live inventory.
+        countExact: true,
       };
     }
   }
@@ -787,8 +936,17 @@ export async function fetchCareersPortalJobs(
     if (jobs.length > 0) {
       // `jobs` is the (capped) stored sample; `total` is the full de-duplicated
       // count of job-like entries found on the page, so the inventory count is
-      // not artificially limited by the sample cap.
-      return { jobs, totalCount: Math.max(total, jobs.length), fetchedUrl: url, source };
+      // not artificially limited by the sample cap. Scraped counts are a
+      // best-effort sample of what the HTML/JSON exposed (a JS-rendered board may
+      // show only a few visible links), so they are NOT marked exact — the caller
+      // should treat them as a lower bound, not the authoritative live total.
+      return {
+        jobs,
+        totalCount: Math.max(total, jobs.length),
+        fetchedUrl: url,
+        source,
+        countExact: false,
+      };
     }
     lastReason = "no_jobs_extracted";
   }

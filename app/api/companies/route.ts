@@ -2,6 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient, supabaseNotConfiguredResponse } from "@/lib/supabase/server";
 import { companyQuerySchema } from "@/lib/validators/company";
 import { fetchJobSpyJobs } from "@/lib/jobs/jobspy";
+import {
+  companyNameMatchStrength,
+  normalizeCompanyKey as normalizeKeyPart,
+} from "@/lib/companies/search-scope";
 
 export const runtime = "nodejs";
 
@@ -495,6 +499,18 @@ function getSourceOpeningsTotal(
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : null;
 }
 
+// Whether the persisted source_openings_total is the vendor-reported *exact*
+// live inventory (a public ATS board API) rather than a best-effort scrape
+// sample. Only an exact total is trusted to cap the matching count; a non-exact
+// total is a lower bound and must never shrink a larger deduped role set.
+// Defaults to false when the flag is absent (legacy rows refreshed before the
+// flag existed are treated as non-exact to avoid wrongly capping).
+function isSourceOpeningsExact(
+  metadata: Record<string, unknown> | null | undefined
+): boolean {
+  return metadata?.["source_openings_exact"] === true;
+}
+
 function getCompanyRevenue(metadata: Record<string, unknown> | null | undefined): number | null {
   const m = metadata ?? {};
   const annual = parseNumericValue(m["annual_revenue"]);
@@ -616,7 +632,6 @@ function groupByCompany(
         role_family: job.role_family,
       }));
 
-      const matchingCount = entry.jobs.length;
       // Totals are keyed by canonical company name (duplicate company_ids for the
       // same company are already collapsed upstream into one deduped count).
       const totalActive = totalActiveByCompany?.get(normalizeKeyPart(entry.company));
@@ -627,10 +642,27 @@ function groupByCompany(
       // duplicates that survived past refreshes. Only when no source total exists
       // do we fall back to the deduped active role count, then the matching set.
       const sourceTotal = getSourceOpeningsTotal(entry.metadata);
+      const sourceExact = isSourceOpeningsExact(entry.metadata);
       const dedupedActive = totalActive?.count ?? 0;
+      // The matching set is the deduped jobs that passed the filters. It can
+      // never legitimately exceed the company's *exact* live inventory, so cap it
+      // at sourceTotal only when that total is authoritative (a public ATS board
+      // API) — this stops residual stale duplicate rows from inflating the count
+      // above what the careers site shows (e.g. Pinterest 176). A non-exact
+      // scrape total is a lower bound and must not shrink a larger real role set.
+      const matchingCount =
+        sourceTotal !== null && sourceExact
+          ? Math.min(entry.jobs.length, sourceTotal)
+          : entry.jobs.length;
+      // Displayed total openings. An exact source total wins outright. A
+      // non-exact source total is a lower bound, so we surface the larger of it
+      // and the deduped active role count. With no source total we fall back to
+      // the deduped active count / matching set.
       const activeOpeningsTotal =
         sourceTotal !== null
-          ? sourceTotal
+          ? sourceExact
+            ? sourceTotal
+            : Math.max(sourceTotal, dedupedActive, matchingCount)
           : Math.max(dedupedActive, matchingCount);
       const latestFromJobs = entry.jobs.reduce<string | null>((latest, job) => {
         const ts = job.posted_at ?? job.createdAt;
@@ -1076,14 +1108,6 @@ function logValidationSummary(context: {
   });
 }
 
-function normalizeKeyPart(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
 function mergeJobs(primaryJobs: GroupedJob[], jobSpyJobs: GroupedJob[]): GroupedJob[] {
   const merged: GroupedJob[] = [];
   const seenPrimaryIds = new Set<string>();
@@ -1452,7 +1476,33 @@ export async function GET(req: NextRequest) {
     })
   );
 
-  const scopedCompanyIds = revenueScopedCompanies.map((company) => company.id);
+  // Company-name search scope. When the free-text query matches one or more
+  // company names, the caller is asking for *that company* (e.g. "Walmart"),
+  // not for every company whose job descriptions mention the term. Narrow the
+  // whole pipeline (roles, jobs, JobSpy, grouping) to the matched companies and
+  // rank by name-match strength. This prevents an unrelated high-count company
+  // (e.g. Pinterest's 176) from leaking into a Walmart/Apple/NVIDIA search via
+  // the cross-company fallback paths below.
+  const companyNameMatches = freeText
+    ? revenueScopedCompanies
+        .map((company) => ({
+          company,
+          strength: companyNameMatchStrength(company.name, freeText),
+        }))
+        .filter((entry) => entry.strength > 0)
+    : [];
+  const isCompanyScopedSearch = companyNameMatches.length > 0;
+  const companyNameStrengthByKey = new Map<string, number>(
+    companyNameMatches.map((entry) => [normalizeKeyPart(entry.company.name), entry.strength])
+  );
+
+  // In a company-scoped search the universe of companies considered downstream is
+  // exactly the name matches; otherwise it stays the full revenue-scoped set.
+  const pipelineCompanies = isCompanyScopedSearch
+    ? companyNameMatches.map((entry) => entry.company)
+    : revenueScopedCompanies;
+
+  const scopedCompanyIds = pipelineCompanies.map((company) => company.id);
   const { data: roleRows, error: rolesErr } = await fetchAllActiveRoles(
     supabase,
     "id,company_id,external_id,source,title,description,location,remote,employment_type,seniority,salary_min,salary_max,url,ghost_score,posted_at,created_at,metadata",
@@ -1463,16 +1513,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: rolesErr.message }, { status: 500 });
   }
 
-  const companyById = new Map(revenueScopedCompanies.map((company) => [company.id, company]));
+  const companyById = new Map(pipelineCompanies.map((company) => [company.id, company]));
   const companyByName = new Map(
-    revenueScopedCompanies.map((company) => [normalizeKeyPart(company.name), company])
+    pipelineCompanies.map((company) => [normalizeKeyPart(company.name), company])
   );
 
   // Resolve each role's company name so duplicate company_ids for the same
   // company collapse to one identity. Roles whose company_id isn't in scope (or
   // is missing) are dropped — they can't be attributed to a displayed company.
   const companyNameById = new Map(
-    revenueScopedCompanies.map((company) => [company.id, normalizeKeyPart(company.name)])
+    pipelineCompanies.map((company) => [company.id, normalizeKeyPart(company.name)])
   );
 
   // Dedupe active roles by canonical job identity, scoped to the company *name*
@@ -1510,7 +1560,7 @@ export async function GET(req: NextRequest) {
   }
 
   const primaryJobs: GroupedJob[] = [];
-  for (const company of revenueScopedCompanies) {
+  for (const company of pipelineCompanies) {
     const companyRoles = [...(rolesByCompany.get(company.id) ?? [])].sort((a, b) => {
       const aPosted = a.posted_at ? Date.parse(a.posted_at) : 0;
       const bPosted = b.posted_at ? Date.parse(b.posted_at) : 0;
@@ -1565,10 +1615,16 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // When the query is a company-name search, the company is already matched —
+  // do NOT re-apply the query as a per-job keyword filter, or we'd drop every
+  // role whose title doesn't literally contain the company name (e.g. all of
+  // Walmart's roles). Domain/role filters still apply within the company.
+  const jobFreeText = isCompanyScopedSearch ? "" : freeText;
+
   const primaryFiltered = filterJobs(primaryJobs, {
     domain: effectiveDomain,
     role: effectiveRole,
-    query: freeText,
+    query: jobFreeText,
   });
 
   // In pure company-universe mode (zero-openings requested, no active search)
@@ -1623,22 +1679,29 @@ export async function GET(req: NextRequest) {
   let mergedFiltered = filterJobs(mergedJobs, {
     domain: effectiveDomain,
     role: effectiveRole,
-    query: freeText,
+    query: jobFreeText,
   });
 
+  // Empty-dataset fallback. We progressively relax the *filter*, but never widen
+  // the *company set*: results are only ever drawn from jobs whose company is in
+  // scope (companyByName). In a company-scoped search the scope is the matched
+  // company; in an open search it is the full revenue-scoped universe. We never
+  // assign the entire unfiltered job set as results — doing so previously let an
+  // unrelated high-count company (Pinterest, 176) surface as the top result for
+  // a Walmart/Apple/NVIDIA query.
   if (mergedFiltered.length === 0 && !universeListing) {
     console.warn("Fallback triggered due to empty dataset", {
       domain: effectiveDomain,
       role: effectiveRole,
       revenueCategory,
-      query: freeText || q || "",
+      query: jobFreeText || q || "",
     });
     const relaxedFiltered = filterJobs(
       mergedJobs,
       {
         domain: effectiveDomain,
         role: effectiveRole,
-        query: freeText,
+        query: jobFreeText,
       },
       {
         allowPartialRoleMatch: true,
@@ -1649,16 +1712,21 @@ export async function GET(req: NextRequest) {
 
     if (relaxedFiltered.length > 0) {
       mergedFiltered = relaxedFiltered;
+    } else if (isCompanyScopedSearch) {
+      // The matched company has no roles passing the domain/role filter. Surface
+      // the company's full deduped role set (mergedJobs is already scoped to it)
+      // rather than fanning out to unrelated companies.
+      mergedFiltered = mergedJobs;
     } else {
       console.warn("Empty results → fallback triggered", {
         domain: effectiveDomain,
         role: effectiveRole,
         revenueCategory,
-        query: freeText || q || "",
+        query: jobFreeText || q || "",
       });
 
       const emptyFallbackQuery =
-        buildFallbackQueryTerms({ domain: effectiveDomain, role: effectiveRole, query: freeText || q || "" }) ||
+        buildFallbackQueryTerms({ domain: effectiveDomain, role: effectiveRole, query: jobFreeText || q || "" }) ||
         q ||
         "engineer";
       const emptyFallbackRaw = await fetchJobSpyJobs(emptyFallbackQuery);
@@ -1693,12 +1761,15 @@ export async function GET(req: NextRequest) {
         .filter((job): job is GroupedJob => job !== null);
 
       const fallbackMergedJobs = mergeJobs(mergedJobs, emptyFallbackJobs);
-      const fallbackRelaxed = filterJobs(
+      // Only the *relaxed-filter* matches are surfaced. If even the relaxed
+      // filter matches nothing, we return an empty set rather than dumping every
+      // company's jobs — an honest "no matches" beats a wrong top company.
+      mergedFiltered = filterJobs(
         fallbackMergedJobs,
         {
           domain: effectiveDomain,
           role: effectiveRole,
-          query: freeText,
+          query: jobFreeText,
         },
         {
           allowPartialRoleMatch: true,
@@ -1706,8 +1777,6 @@ export async function GET(req: NextRequest) {
           allowPartialQueryMatch: true,
         }
       );
-
-      mergedFiltered = fallbackRelaxed.length > 0 ? fallbackRelaxed : fallbackMergedJobs;
     }
   }
 
@@ -1722,7 +1791,7 @@ export async function GET(req: NextRequest) {
   // there is no reason to fan out external requests per company.
   const minimumJobsValidated = universeListing
     ? validated
-    : await enforceMinimumJobs(validated, freeText || q || "", {
+    : await enforceMinimumJobs(validated, jobFreeText || q || "", {
         domain: effectiveDomain,
         role: effectiveRole,
         revenueCategory,
@@ -1731,13 +1800,17 @@ export async function GET(req: NextRequest) {
   const withIndeedValidation = universeListing
     ? withIntegrity
     : await validateAgainstIndeed(withIntegrity, {
-        query: freeText || q || "",
+        query: jobFreeText || q || "",
         domain: effectiveDomain,
         role: effectiveRole,
       });
 
+  // A company-scoped search must always surface the matched company card, even
+  // when it currently has 0 active openings (e.g. its careers source reported
+  // an inventory but no role rows are ingested yet). Otherwise enforceOpenRoles
+  // would hide the very company the user searched for.
   const withOpenings = withIndeedValidation.filter(
-    (company) => !enforceOpenRoles || company.jobCount > 0
+    (company) => !enforceOpenRoles || isCompanyScopedSearch || company.jobCount > 0
   );
 
   // Company-universe mode: append monitored/seeded companies that currently
@@ -1749,6 +1822,16 @@ export async function GET(req: NextRequest) {
   // them when the caller isn't actively searching for specific openings.
   const annotated = (() => {
     const base = (() => {
+      // Company-scoped search: always include every matched company as a card,
+      // appending zero-opening placeholders for matches that produced no jobs so
+      // the searched-for company is never missing.
+      if (isCompanyScopedSearch) {
+        const present = new Set(withOpenings.map((c) => c.id));
+        const zeros = pipelineCompanies
+          .filter((company) => !present.has(company.id))
+          .map((company) => buildZeroOpeningCompany(company));
+        return [...withOpenings, ...zeros];
+      }
       if (!includeZeroOpenings) return withOpenings;
       const present = new Set(withOpenings.map((c) => c.id));
       const isSearchScoped = Boolean(freeText || effectiveDomain || effectiveRole);
@@ -1761,7 +1844,18 @@ export async function GET(req: NextRequest) {
     // Collapse same-named duplicates (e.g. a stale legacy row alongside a
     // source-backed monitored row) so the stale low count can't win or appear
     // as a second card.
-    return dedupeByName(base);
+    const deduped = dedupeByName(base);
+    // In a company-scoped search, rank by name-match strength first (exact >
+    // prefix > substring) so the requested company leads, then by opening count.
+    if (isCompanyScopedSearch) {
+      return deduped.sort((a, b) => {
+        const sa = companyNameStrengthByKey.get(normalizeKeyPart(a.name)) ?? 0;
+        const sb = companyNameStrengthByKey.get(normalizeKeyPart(b.name)) ?? 0;
+        if (sb !== sa) return sb - sa;
+        return (b.active_openings_total ?? b.jobCount) - (a.active_openings_total ?? a.jobCount);
+      });
+    }
+    return deduped;
   })();
   console.log("Companies returned:", annotated.length);
 
