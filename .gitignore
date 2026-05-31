@@ -33,3 +33,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts.bak
+
+# open-roles validation: keep the committed seed, ignore generated reports
+/scripts/data/open-roles-validation-report.json
+/scripts/data/*-report.json
