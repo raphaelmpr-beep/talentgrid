@@ -33,6 +33,28 @@ export type CompanyMeta = {
   location?: string | null;
 };
 
+export type CountDisplayMode =
+  | "exact_source_total"
+  | "filtered_matching_openings"
+  | "deduped_role_rows"
+  | "validation_pending"
+  | "non_exact_sample_withheld"
+  | "source_blocked";
+
+export type CountDiagnostics = {
+  total_source_openings: number | null;
+  source_openings_exact: boolean;
+  source_status: string | null;
+  validation_status: "exact" | "pending" | "blocked" | "non_exact_sample" | "unknown";
+  matching_openings_count: number;
+  deduped_role_rows_count: number;
+  count_display_mode: CountDisplayMode;
+  filters_affect_counts: boolean;
+  filtered_out_openings_count: number | null;
+  applied_role_filters: string[];
+  applied_domain_filters: string[];
+};
+
 export type CompanyResult = {
   id: string;
   name: string;
@@ -79,5 +101,6 @@ export type CompanyResult = {
   source_discrepancy?: boolean;
   indeedEstimate?: number;
   confidence?: "confirmed" | "enhanced" | "low";
+  count_diagnostics?: CountDiagnostics;
   created_at: string;
 };

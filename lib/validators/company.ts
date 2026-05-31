@@ -49,11 +49,36 @@ export const COMPANY_REVENUE_CATEGORIES = [
   "gt_1b",
 ] as const;
 
+// Map a free-form role label/alias to the canonical COMPANY_ROLE_FAMILIES key.
+// Accepts the enum keys themselves plus the human labels the UI/API expose
+// ("Software Engineer", "ML/AI", "DevOps/SRE", "Full Stack") so a caller passing
+// roleFamily=Software Engineer resolves to "engineer" instead of 400-ing. An
+// unrecognised string is returned lowercased and left for the enum to reject.
+const ROLE_FAMILY_ALIASES: Record<string, (typeof COMPANY_ROLE_FAMILIES)[number]> = {
+  engineering: "engineer",
+  "software engineer": "engineer",
+  "software engineering": "engineer",
+  swe: "engineer",
+  "front end": "frontend",
+  "front-end": "frontend",
+  "back end": "backend",
+  "back-end": "backend",
+  "full stack": "fullstack",
+  "full-stack": "fullstack",
+  "devops/sre": "devops",
+  "dev ops": "devops",
+  sre: "devops",
+  "data engineer": "data",
+  "data science": "data",
+  "ml/ai": "ml",
+  ai: "ml",
+  "machine learning": "ml",
+};
+
 function normaliseFamilyAlias(value: unknown): unknown {
   if (typeof value !== "string") return value;
   const v = value.trim().toLowerCase();
-  if (v === "engineering") return "engineer";
-  return v;
+  return ROLE_FAMILY_ALIASES[v] ?? v;
 }
 
 export const companyQuerySchema = z
@@ -62,6 +87,13 @@ export const companyQuerySchema = z
     pageSize: z.coerce.number().int().min(1).optional(),
     family: z.preprocess(normaliseFamilyAlias, z.enum(COMPANY_ROLE_FAMILIES).optional()),
     role: z.preprocess(normaliseFamilyAlias, z.enum(COMPANY_ROLE_FAMILIES).optional()),
+    // Accepted aliases for the role-family filter. Production callers were
+    // passing roleFamily/roleCategory and getting silently ignored because only
+    // `role`/`family` were parsed. They map through the same alias normaliser and
+    // enum (so "Software Engineer" → "engineer", "engineering" → "engineer"). The
+    // route picks the first of role/family/roleFamily/roleCategory that resolves.
+    roleFamily: z.preprocess(normaliseFamilyAlias, z.enum(COMPANY_ROLE_FAMILIES).optional()),
+    roleCategory: z.preprocess(normaliseFamilyAlias, z.enum(COMPANY_ROLE_FAMILIES).optional()),
     domain: z.enum(COMPANY_DOMAINS).optional(),
     revenueCategory: z.enum(COMPANY_REVENUE_CATEGORIES).optional(),
     isHiring: z

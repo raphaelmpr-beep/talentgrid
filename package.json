@@ -20,7 +20,8 @@
     "smoke:company-search": "tsx scripts/company-search-smoke.ts",
     "smoke:open-roles": "tsx scripts/validate-open-roles-smoke.ts",
     "smoke:midmarket": "tsx scripts/midmarket-candidates-smoke.ts",
-    "smoke:candidate-guard": "tsx scripts/candidate-guard-smoke.ts"
+    "smoke:candidate-guard": "tsx scripts/candidate-guard-smoke.ts",
+    "smoke:count-diagnostics": "tsx scripts/count-diagnostics-smoke.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

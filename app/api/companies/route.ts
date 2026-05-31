@@ -14,6 +14,10 @@ import {
   hasRevenueOverlap,
   resolveIncludeUnknownRevenue,
 } from "@/lib/companies/revenue-filter";
+import {
+  deriveCountDiagnostics,
+  type CountDiagnostics,
+} from "@/lib/companies/count-diagnostics";
 
 export const runtime = "nodejs";
 
@@ -718,7 +722,24 @@ type ValidatedCompany = AggregatedCompany & {
   source_discrepancy?: boolean;
   indeedEstimate?: number;
   confidence?: "confirmed" | "enhanced" | "low";
+  count_diagnostics?: CountDiagnostics;
 };
+
+function readBoolFlag(
+  metadata: Record<string, unknown> | null | undefined,
+  key: string,
+  fallback: boolean
+): boolean {
+  const raw = metadata?.[key];
+  return typeof raw === "boolean" ? raw : fallback;
+}
+
+function readSourceStatus(
+  metadata: Record<string, unknown> | null | undefined
+): string | null {
+  const raw = metadata?.["source_status"];
+  return typeof raw === "string" && raw.trim() ? raw.trim() : null;
+}
 
 function isCommonFilterCombination(filters: {
   domain?: DomainKey;
@@ -1470,6 +1491,8 @@ export async function GET(req: NextRequest) {
     pageSize,
     family,
     role,
+    roleFamily,
+    roleCategory,
     domain,
     revenueCategory,
     isHiring,
@@ -1493,7 +1516,11 @@ export async function GET(req: NextRequest) {
   );
 
   const smartQuery = parseSmartQuery(q);
-  const effectiveRole = role ?? family ?? smartQuery.detectedRole;
+  // Accept all four role-family param spellings (role/family/roleFamily/
+  // roleCategory) so production callers passing roleFamily=… or roleCategory=…
+  // are no longer silently ignored. The smart query is the last-resort fallback.
+  const effectiveRole =
+    role ?? family ?? roleFamily ?? roleCategory ?? smartQuery.detectedRole;
   const effectiveDomain = domain ?? smartQuery.detectedDomain;
   const freeText = normaliseFreeText(smartQuery.remainingQuery || q);
 
@@ -1934,20 +1961,55 @@ export async function GET(req: NextRequest) {
     }
     return deduped;
   })();
-  console.log("Companies returned:", annotated.length);
+
+  // Per-company count diagnostics. The matching count is filtered by active
+  // role/domain/search filters; the deduped role-row count and resolved source
+  // inventory are the broader totals we compare against to explain *why* a count
+  // is what it is (exact source total vs. filtered subset vs. validation pending
+  // vs. source blocked). Computed here, after dedupe, so the final displayed
+  // counts are the ones diagnosed.
+  const appliedRoleFilters = effectiveRole ? [effectiveRole] : [];
+  const appliedDomainFilters = effectiveDomain ? [effectiveDomain] : [];
+  const filtersActiveForCounts = Boolean(
+    effectiveRole || effectiveDomain || (isCompanyScopedSearch ? false : freeText)
+  );
+  const diagnosed = annotated.map((company) => {
+    const key = normalizeKeyPart(company.name);
+    const resolved =
+      sourceTotalByCompany.get(key) ?? { exactTotal: null, nonExactTotal: null };
+    const dedupedActiveCount = totalActiveByCompany.get(key)?.count ?? company.jobCount;
+    const matchingCount = company.active_openings_matching_filters ?? company.jobCount;
+    const count_diagnostics = deriveCountDiagnostics({
+      resolved,
+      matchingCount,
+      dedupedActiveCount,
+      sourceStatus: readSourceStatus(company.metadata),
+      fetchEnabled: readBoolFlag(company.metadata, "fetch_enabled", false),
+      validationEnabled: readBoolFlag(company.metadata, "validation_enabled", true),
+      filtersActive: filtersActiveForCounts,
+      appliedRoleFilters,
+      appliedDomainFilters,
+    });
+    return { ...company, count_diagnostics };
+  });
+  console.log("Companies returned:", diagnosed.length);
 
   logValidationSummary({
     totalPrimaryJobs: primaryJobs.length,
     totalMergedJobs: mergedJobs.length,
     filteredJobs: mergedFiltered.length,
-    companiesReturned: annotated.length,
-    companies: annotated,
+    companiesReturned: diagnosed.length,
+    companies: diagnosed,
   });
 
   const filtersApplied = {
     domain: effectiveDomain,
     role: effectiveRole,
     family,
+    // Echo the accepted role-family aliases so a caller can confirm their param
+    // was honoured (roleFamily/roleCategory were previously silently ignored).
+    roleFamily,
+    roleCategory,
     revenueCategory,
     revenueBand,
     minRevenue,
@@ -1957,6 +2019,12 @@ export async function GET(req: NextRequest) {
     q,
     smartQuery,
     jobSpyTriggered: shouldTriggerJobSpy,
+    // Response-level filter diagnostics: the resolved role/domain filters applied
+    // to the whole request and whether they could reduce visible counts. Per-
+    // company filtered_out_openings_count lives in each card's count_diagnostics.
+    applied_role_filters: appliedRoleFilters,
+    applied_domain_filters: appliedDomainFilters,
+    filters_affect_counts: filtersActiveForCounts,
   };
 
   const queryTimeMs = Date.now() - startedAt;
@@ -1964,19 +2032,19 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     // Results are never artificially capped: `data` is the full matching set
     // grouped by company. The UI paginates client-side at DEFAULT_PAGE_SIZE.
-    data: annotated,
+    data: diagnosed,
     page: page ?? 1,
     // Default to 20 per page when the caller doesn't specify; `total` always
     // reflects the full result set so the UI can represent every company.
     pageSize: pageSize ?? DEFAULT_PAGE_SIZE,
-    total: annotated.length,
+    total: diagnosed.length,
     filters: filtersApplied,
     ...(debug
       ? {
           debug: {
             total_jobs: primaryJobs.length,
             filtered_jobs: mergedFiltered.length,
-            companies_returned: annotated.length,
+            companies_returned: diagnosed.length,
             filters_applied: filtersApplied,
             fallbacks_triggered: {
               jobspy: shouldTriggerJobSpy,

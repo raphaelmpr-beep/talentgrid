@@ -24,6 +24,54 @@ export function CompanyCard({
   // matching count differs from the total company inventory.
   const showMatching = filtersActive && matchingCount !== totalCount;
 
+  const diag = company.count_diagnostics;
+  // The count-status indication shown on the card so a 0/low/capped count reads
+  // as explained rather than broken. Driven by the backend count_display_mode.
+  const countNote = (() => {
+    if (!diag) return null;
+    switch (diag.count_display_mode) {
+      case "exact_source_total":
+        return {
+          tone: "ok" as const,
+          text: `Total openings: ${formatCompactNumber(diag.total_source_openings ?? totalCount)} (source exact)`,
+        };
+      case "filtered_matching_openings": {
+        const hidden = diag.filtered_out_openings_count ?? 0;
+        return {
+          tone: "info" as const,
+          text: `Matching this filter: ${formatCompactNumber(diag.matching_openings_count)} · ${formatCompactNumber(hidden)} filtered out by role/domain filters`,
+        };
+      }
+      case "validation_pending":
+        return {
+          tone: "warn" as const,
+          text: "Validation pending — source count not exact yet",
+        };
+      case "non_exact_sample_withheld":
+        return {
+          tone: "warn" as const,
+          text: "Source sample not exact — count withheld pending validation",
+        };
+      case "source_blocked":
+        return {
+          tone: "warn" as const,
+          text:
+            diag.source_status === "captcha_or_bot_challenge"
+              ? "Source blocked (captcha/bot challenge)"
+              : "Source blocked or not mapped — count may be stale",
+        };
+      case "deduped_role_rows":
+      default:
+        return null;
+    }
+  })();
+  const noteToneClass =
+    countNote?.tone === "ok"
+      ? "text-emerald-700"
+      : countNote?.tone === "warn"
+        ? "text-amber-700"
+        : "text-neutral-600";
+
   return (
     <Card className="h-full overflow-hidden border-neutral-200">
       <CardContent className="space-y-4 p-4 sm:p-5">
@@ -48,6 +96,10 @@ export function CompanyCard({
             )}
           </div>
         </div>
+
+        {countNote && (
+          <p className={`text-xs font-medium ${noteToneClass}`}>{countNote.text}</p>
+        )}
 
         <div className="flex flex-wrap gap-2">
           {company.domains.length > 0 ? (
