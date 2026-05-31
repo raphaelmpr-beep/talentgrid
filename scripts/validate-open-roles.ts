@@ -32,6 +32,9 @@
 //   --concurrency=N    parallel workers (default 4, env CONCURRENCY)
 //   --timeout=N        per-request timeout ms (default 12000, env TIMEOUT_MS)
 //   --sample-jobs=N    max sample titles/URLs to record per company (default 5)
+//   --fail-on-drift    exit non-zero when a live TalentGrid count drifts from an
+//                      exact source total (env FAIL_ON_DRIFT=1). Requires
+//                      TALENTGRID_BASE_URL so a comparison can be made.
 //
 //   # Optional drift comparison against a live TalentGrid deployment:
 //   TALENTGRID_BASE_URL=https://talentgrid-ebcb5665.vercel.app npm run validate:open-roles -- --limit=10
@@ -139,6 +142,9 @@ type Cli = {
   concurrency: number;
   timeoutMs: number;
   sampleJobs: number;
+  // When set, exit non-zero if any company's live TalentGrid count drifts from
+  // the freshly-derived exact source total. Lets CI gate on count drift.
+  failOnDrift: boolean;
 };
 
 const DEFAULT_INPUT = "scripts/data/open-roles-validation-seed.json";
@@ -173,6 +179,7 @@ function parseCli(argv: string[]): Cli {
     concurrency: num("concurrency", process.env.CONCURRENCY, 4),
     timeoutMs: num("timeout", process.env.TIMEOUT_MS, 12000),
     sampleJobs: num("sample-jobs", process.env.SAMPLE_JOBS, 5),
+    failOnDrift: flags.get("fail-on-drift") === "true" || process.env.FAIL_ON_DRIFT === "1",
   };
 }
 
@@ -473,6 +480,59 @@ async function main(): Promise<void> {
   await writeFile(outputPath, JSON.stringify(output, null, 2));
   console.log("\nValidation complete →", outputPath);
   console.log(JSON.stringify(summary, null, 2));
+
+  // Drift report: list every company whose live TalentGrid count differs from
+  // the freshly-derived source count, so the drift is visible (and CI-gateable
+  // via --fail-on-drift) before it reaches a card.
+  const drifted = collectDrift(validated);
+  if (drifted.length > 0) {
+    console.error(`\nDrift detected for ${drifted.length} company/companies:`);
+    for (const d of drifted) {
+      const exact = d.count_exact ? " (exact source)" : " (non-exact source)";
+      console.error(
+        `  ${d.company_name}: TalentGrid=${d.talentgrid_openings_count} ` +
+          `source=${d.active_openings_count}${exact} delta=${d.count_delta}`
+      );
+    }
+    if (cli.failOnDrift) {
+      // Drift against an *exact* source is authoritative and must fail CI. Drift
+      // against a non-exact (sample) source is a lower-bound mismatch only, so it
+      // is reported but does not fail the run.
+      const exactDrift = drifted.filter((d) => d.count_exact);
+      if (exactDrift.length > 0) {
+        console.error(
+          `\n--fail-on-drift: ${exactDrift.length} company/companies drift from an ` +
+            `exact source total. Failing.`
+        );
+        process.exit(2);
+      }
+      console.error("\n--fail-on-drift: drift is only against non-exact sources; not failing.");
+    }
+  }
+}
+
+type DriftRow = {
+  company_name: string;
+  talentgrid_openings_count: number | null;
+  active_openings_count: number | null;
+  count_delta: number | null;
+  count_exact: boolean;
+};
+
+function collectDrift(validated: ValidatedCompany[]): DriftRow[] {
+  const out: DriftRow[] = [];
+  for (const c of validated) {
+    const v = c.open_roles_validation;
+    if (v.count_match_status !== "drift") continue;
+    out.push({
+      company_name: c.company_name,
+      talentgrid_openings_count: v.talentgrid_openings_count,
+      active_openings_count: v.active_openings_count,
+      count_delta: v.count_delta,
+      count_exact: v.count_exact,
+    });
+  }
+  return out;
 }
 
 type ValidationSummary = {

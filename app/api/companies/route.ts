@@ -5,6 +5,7 @@ import { fetchJobSpyJobs } from "@/lib/jobs/jobspy";
 import {
   normalizeCompanyKey as normalizeKeyPart,
   resolveSourceTotal,
+  resolveDisplayedCounts,
   resolveCompanyNameAliases,
   companyNameMatchStrengthWithAliases,
   type ResolvedSourceTotal,
@@ -626,13 +627,20 @@ function groupByCompany(
           };
         })();
 
-      // When an exact live inventory exists, the matching set can never exceed
-      // it — cap the deduped jobs themselves so jobs.length is authoritative for
-      // every downstream consumer (enforceJobCountIntegrity, dedupeByName). This
-      // is what stops two residual legacy duplicate rows from carrying Pinterest
-      // to 178 when the careers site shows 176.
-      if (resolved.exactTotal !== null && entry.jobs.length > resolved.exactTotal) {
-        entry.jobs = entry.jobs.slice(0, resolved.exactTotal);
+      // Totals are keyed by canonical company name (duplicate company_ids for the
+      // same company are already collapsed upstream into one deduped count).
+      const totalActive = totalActiveByCompany?.get(companyKey);
+      const dedupedActive = totalActive?.count ?? 0;
+      // Centralised cap rule: an exact live inventory caps the matching set and
+      // the surfaced jobs, and wins outright as the displayed total. This is what
+      // stops residual legacy duplicate role rows from carrying Pinterest to 178
+      // when the careers site shows 176.
+      const counts = resolveDisplayedCounts(resolved, {
+        dedupedActive,
+        matchingCount: entry.jobs.length,
+      });
+      if (entry.jobs.length > counts.jobsCap) {
+        entry.jobs = entry.jobs.slice(0, counts.jobsCap);
       }
 
       const rolesSummary = Array.from(entry.rolesMap.entries())
@@ -662,25 +670,12 @@ function groupByCompany(
         role_family: job.role_family,
       }));
 
-      // Totals are keyed by canonical company name (duplicate company_ids for the
-      // same company are already collapsed upstream into one deduped count).
-      const totalActive = totalActiveByCompany?.get(companyKey);
-      const dedupedActive = totalActive?.count ?? 0;
-      // The matching set is the deduped jobs that passed the filters, already
-      // capped above at the exact live inventory when one exists for the name, so
-      // it can never exceed what the careers site shows (e.g. Pinterest 176).
-      const matchingCount = entry.jobs.length;
-      // Displayed total openings. An exact source total is authoritative and wins
-      // outright — it is the live count and is *never* inflated by max() with a
-      // stale deduped role count. A non-exact source total is a lower bound, so we
-      // surface the larger of it and the deduped active role count. With no source
-      // total we fall back to the deduped active count / matching set.
-      const activeOpeningsTotal =
-        resolved.exactTotal !== null
-          ? resolved.exactTotal
-          : resolved.nonExactTotal !== null
-            ? Math.max(resolved.nonExactTotal, dedupedActive, matchingCount)
-            : Math.max(dedupedActive, matchingCount);
+      // Matching/total counts come from the centralised cap rule above. The
+      // matching set was already sliced to counts.jobsCap, so entry.jobs.length
+      // now equals counts.matchingCount and is authoritative for downstream
+      // consumers (enforceJobCountIntegrity, dedupeByName).
+      const matchingCount = counts.matchingCount;
+      const activeOpeningsTotal = counts.activeOpeningsTotal;
       const latestFromJobs = entry.jobs.reduce<string | null>((latest, job) => {
         const ts = job.posted_at ?? job.createdAt;
         if (!ts) return latest;
@@ -1395,7 +1390,12 @@ function dedupeByName(companies: ValidatedCompany[]): ValidatedCompany[] {
   for (const key of order) {
     const members = groups.get(key)!;
     if (members.length === 1) {
-      result.push(members[0]);
+      // Even a lone row is re-capped against its own resolved source inventory:
+      // an exact total persisted on the row must cap its matching/jobs counts so
+      // a stale role set on a single (un-duplicated) company can't display past
+      // the live careers-site count. groupByCompany already does this upstream;
+      // this is the belt-and-suspenders guarantee at the final aggregation step.
+      result.push(capCompanyToSourceTotal(members[0]));
       continue;
     }
     const winner = members.reduce((best, current) => {
@@ -1411,7 +1411,7 @@ function dedupeByName(companies: ValidatedCompany[]): ValidatedCompany[] {
     const resolved = resolveSourceTotal(members);
     // Keep the largest known total and the richest matching set across the
     // duplicates so merging never lowers a count or drops openings.
-    let mergedMatching = members.reduce(
+    const mergedMatching = members.reduce(
       (max, c) => Math.max(max, c.active_openings_matching_filters ?? c.jobCount ?? 0),
       0
     );
@@ -1423,18 +1423,17 @@ function dedupeByName(companies: ValidatedCompany[]): ValidatedCompany[] {
       (best, c) => (c.jobs.length > best.jobs.length ? c : best),
       winner
     );
-    // An exact live inventory is authoritative: cap the matching set and the
-    // surfaced jobs at it (so two legacy duplicate rows can't push the count past
-    // what the careers site shows), and use it verbatim as the total rather than
-    // max()-ing with a stale role count.
-    if (resolved.exactTotal !== null) {
-      mergedMatching = Math.min(mergedMatching, resolved.exactTotal);
-      if (mostJobs.jobs.length > resolved.exactTotal) {
-        mostJobs = { ...mostJobs, jobs: mostJobs.jobs.slice(0, resolved.exactTotal) };
-      }
+    // Centralised cap rule across the merged duplicates: an exact live inventory
+    // caps the matching set and the surfaced jobs (so two legacy duplicate rows
+    // can't push the count past what the careers site shows) and is used verbatim
+    // as the total. A non-exact total only ever raises the count as a lower bound.
+    const counts = resolveDisplayedCounts(resolved, {
+      dedupedActive: mergedTotal,
+      matchingCount: mergedMatching,
+    });
+    if (mostJobs.jobs.length > counts.jobsCap) {
+      mostJobs = { ...mostJobs, jobs: mostJobs.jobs.slice(0, counts.jobsCap) };
     }
-    const activeOpeningsTotal =
-      resolved.exactTotal !== null ? resolved.exactTotal : Math.max(mergedTotal, mergedMatching);
     result.push({
       ...winner,
       jobs: mostJobs.jobs,
@@ -1443,11 +1442,34 @@ function dedupeByName(companies: ValidatedCompany[]): ValidatedCompany[] {
       top_roles: winner.top_roles ?? mostJobs.top_roles,
       jobCount: mostJobs.jobs.length,
       open_roles_count: mostJobs.jobs.length,
-      active_openings_matching_filters: mergedMatching,
-      active_openings_total: activeOpeningsTotal,
+      active_openings_matching_filters: counts.matchingCount,
+      active_openings_total: counts.activeOpeningsTotal,
     });
   }
   return result;
+}
+
+// Re-cap a single aggregated company against its own resolved source inventory.
+// Used for the lone-row dedupe path so an exact total persisted on the row caps
+// its matching/jobs counts and is used verbatim as the displayed total, matching
+// the multi-duplicate path exactly.
+function capCompanyToSourceTotal(company: ValidatedCompany): ValidatedCompany {
+  const resolved = resolveSourceTotal([company]);
+  if (resolved.exactTotal === null && resolved.nonExactTotal === null) return company;
+  const matching = company.active_openings_matching_filters ?? company.jobCount ?? 0;
+  const counts = resolveDisplayedCounts(resolved, {
+    dedupedActive: company.active_openings_total ?? matching,
+    matchingCount: matching,
+  });
+  const jobs = company.jobs.length > counts.jobsCap ? company.jobs.slice(0, counts.jobsCap) : company.jobs;
+  return {
+    ...company,
+    jobs,
+    jobCount: jobs.length,
+    open_roles_count: jobs.length,
+    active_openings_matching_filters: counts.matchingCount,
+    active_openings_total: counts.activeOpeningsTotal,
+  };
 }
 
 export async function GET(req: NextRequest) {

@@ -1039,6 +1039,44 @@ async function fetchAppleBoard(
   return { jobs, total: Math.floor(total), source: "apple" };
 }
 
+// Build a named-employer adapter for a company whose openings live on a public
+// Workday CXS board, keyed by name (the seed has no Workday host in the careers
+// URL, so URL sniffing can't reach it). tenant/dc/site identify the board; the
+// CXS jobs endpoint reports the exact live `total`.
+function workdayNamedAdapter(
+  tenant: string,
+  dc: string,
+  site: string,
+  sourceLabel: string
+): (maxJobs: number, r: ResolvedFetch) => Promise<NamedEmployerResult | null> {
+  const host = `${tenant}.${dc}.myworkdayjobs.com`;
+  const board: AtsBoard = {
+    vendor: "workday",
+    apiUrl: `https://${host}/wday/cxs/${tenant}/${site}/jobs`,
+    baseUrl: `https://${host}/${site}`,
+    host,
+  };
+  return async (maxJobs, r) => {
+    const result = await fetchWorkdayBoard(board, maxJobs, r);
+    if (!result || result.total <= 0) return null;
+    return { jobs: result.jobs, total: result.total, source: sourceLabel };
+  };
+}
+
+// NVIDIA runs a public Workday CXS board; its tenant/site are the public, stable
+// identifiers from the live careers site (verified to report an exact `total`).
+//
+// Other large employers intentionally stay non-exact and fall through to the
+// generic ATS/HTML path because they lack a stable, public, key-less JSON
+// inventory endpoint we can rely on:
+//   - Google/Alphabet: the former careers.google.com search API is gone (404).
+//   - Walmart: careers.walmart.com has no public JSON inventory endpoint.
+//   - Johnson & Johnson, UnitedHealth Group: their Workday tenants/sites are not
+//     publicly resolvable (every probed tenant/site returned HTTP 422).
+//   - JPMorgan Chase: Oracle Recruiting Cloud, no stable keyless JSON endpoint.
+//   - Meta: JS-rendered board with no stable public inventory API.
+const fetchNvidiaBoard = workdayNamedAdapter("nvidia", "wd5", "NVIDIAExternalCareerSite", "workday");
+
 // Registry of named-employer adapters, keyed by normalised company name and the
 // common aliases TalentGrid stores. Only employers with a stable, public,
 // key-less JSON inventory endpoint are listed — others fall through to the
@@ -1051,6 +1089,7 @@ const NAMED_EMPLOYER_ADAPTERS: Record<
   "amazon com": fetchAmazonBoard,
   microsoft: fetchMicrosoftBoard,
   apple: fetchAppleBoard,
+  nvidia: fetchNvidiaBoard,
 };
 
 function resolveNamedEmployerAdapter(

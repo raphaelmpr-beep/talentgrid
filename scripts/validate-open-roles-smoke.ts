@@ -44,6 +44,7 @@ const CLI: Cli = {
   concurrency: 4,
   timeoutMs: 5000,
   sampleJobs: SAMPLE_SIZE,
+  failOnDrift: false,
 };
 
 // The stable set of keys every open_roles_validation object must carry, so
@@ -283,6 +284,10 @@ async function run(): Promise<void> {
     assert(cli.limit === 10, `parses --limit (got ${cli.limit})`);
     assert(cli.concurrency === 8, `parses --concurrency (got ${cli.concurrency})`);
     assert(cli.only === "Pinterest", `parses --only (got ${cli.only})`);
+    assert(cli.failOnDrift === false, "fail-on-drift defaults off");
+
+    const failCli = parseCli(["seed.json", "out.json", "--fail-on-drift"]);
+    assert(failCli.failOnDrift === true, "parses --fail-on-drift");
 
     assert(statusFromReason("captcha_or_bot_challenge") === "captcha_or_bot_challenge", "maps captcha reason");
     assert(statusFromReason("js_only_portal") === "portal_accessible_but_roles_not_counted", "maps js_only reason");

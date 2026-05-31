@@ -119,6 +119,59 @@ export function resolveSourceTotal(
   return { exactTotal, nonExactTotal };
 }
 
+// The counts a company card should display, derived from the deduped matching
+// role set and the resolved source inventory. Centralised here (rather than
+// inline in the route) so the cap rule is exercised by a unit test and applied
+// identically everywhere counts are produced — groupByCompany and dedupeByName.
+export type DisplayedCounts = {
+  // The matching/open-roles count shown on the card. Capped at the exact source
+  // total when one exists so residual legacy duplicate role rows can never push
+  // it past what the live careers site shows (Pinterest: 176, never 178).
+  matchingCount: number;
+  // The displayed total openings. An exact source total wins outright (it is the
+  // live count and is never inflated by a stale deduped role count). A non-exact
+  // total is a lower bound, so the larger of it and the deduped counts is shown.
+  // With no source total we fall back to the deduped active / matching set.
+  activeOpeningsTotal: number;
+  // How many matching role rows to keep when surfacing jobs[]. Equals
+  // matchingCount; callers slice their jobs array to this length.
+  jobsCap: number;
+};
+
+// Resolve the displayed counts for one company from its deduped role counts and
+// the source inventory resolved across all its duplicate rows. The exact-total
+// cap is the load-bearing invariant: an exact live inventory is authoritative,
+// so the matching set and surfaced jobs can never exceed it, and it is used
+// verbatim as the total (never max()-ed with a stale role count). Counts are
+// otherwise never lowered — a non-exact source total only ever raises a count
+// as a lower bound, and is itself uncapped.
+export function resolveDisplayedCounts(
+  resolved: ResolvedSourceTotal,
+  counts: { dedupedActive: number; matchingCount: number }
+): DisplayedCounts {
+  const { dedupedActive, matchingCount } = counts;
+  if (resolved.exactTotal !== null) {
+    const capped = Math.min(matchingCount, resolved.exactTotal);
+    return {
+      matchingCount: capped,
+      activeOpeningsTotal: resolved.exactTotal,
+      jobsCap: capped,
+    };
+  }
+  if (resolved.nonExactTotal !== null) {
+    return {
+      matchingCount,
+      activeOpeningsTotal: Math.max(resolved.nonExactTotal, dedupedActive, matchingCount),
+      jobsCap: matchingCount,
+    };
+  }
+  return {
+    matchingCount,
+    activeOpeningsTotal: Math.max(dedupedActive, matchingCount),
+    jobsCap: matchingCount,
+  };
+}
+
 export type NamedCompany = { id: string; name: string };
 
 export type CompanyNameMatch<T extends NamedCompany> = {

@@ -17,6 +17,7 @@ import {
   normalizeCompanyKey,
   resolveCompanyNameAliases,
   resolveSourceTotal,
+  resolveDisplayedCounts,
   type NamedCompany,
 } from "@/lib/companies/search-scope";
 
@@ -175,6 +176,54 @@ console.log("source total: exact wins across duplicate legacy rows (Pinterest 17
   ]);
   assert(noExact.exactTotal === null, "no exact total when no duplicate reports one");
   assert(noExact.nonExactTotal === 50, "non-exact total falls back to the max sample");
+}
+
+console.log("displayed counts: exact total 176 caps 178 legacy rows (Pinterest)");
+{
+  // Reproduces the production drift: a normalised company name carries an exact
+  // source total of 176 (Greenhouse meta.total) while 178 deduped legacy role
+  // rows survived. Every displayed count must be <= 176, and the total must be
+  // exactly 176 — never the inflated 178 and never max()-ed up.
+  const rows = [
+    { metadata: {} },
+    { metadata: { source_openings_total: 176, source_openings_exact: true } },
+    { metadata: { source_openings_total: 178, source_openings_exact: false } },
+  ];
+  const resolved = resolveSourceTotal(rows);
+  const counts = resolveDisplayedCounts(resolved, { dedupedActive: 178, matchingCount: 178 });
+  assert(counts.matchingCount <= 176, `matchingCount capped at 176 (got ${counts.matchingCount})`);
+  assert(counts.matchingCount === 176, `matchingCount is exactly 176 (got ${counts.matchingCount})`);
+  assert(counts.jobsCap <= 176, `jobsCap capped at 176 (got ${counts.jobsCap})`);
+  assert(
+    counts.activeOpeningsTotal === 176,
+    `activeOpeningsTotal is exactly 176, never inflated to 178 (got ${counts.activeOpeningsTotal})`
+  );
+
+  // When the exact total exceeds the deduped role set, the count is NOT capped
+  // down to the sample — the full exact inventory is shown (uncapped invariant).
+  const big = resolveDisplayedCounts(
+    { exactTotal: 10000, nonExactTotal: null },
+    { dedupedActive: 1, matchingCount: 1 }
+  );
+  assert(
+    big.activeOpeningsTotal === 10000,
+    `exact total 10000 displayed uncapped despite 1 ingested row (got ${big.activeOpeningsTotal})`
+  );
+
+  // A non-exact source total only ever raises the count as a lower bound; it
+  // never caps a larger deduped set, and is itself never capped.
+  const nonExact = resolveDisplayedCounts(
+    { exactTotal: null, nonExactTotal: 13 },
+    { dedupedActive: 5, matchingCount: 5 }
+  );
+  assert(
+    nonExact.activeOpeningsTotal === 13,
+    `non-exact lower bound raises total to 13 (got ${nonExact.activeOpeningsTotal})`
+  );
+  assert(
+    nonExact.matchingCount === 5,
+    `non-exact total never caps the matching set (got ${nonExact.matchingCount})`
+  );
 }
 
 if (failures > 0) {
