@@ -48,6 +48,8 @@ type RoleRow = {
   posted_status?: string | null;
   discovered_at?: string | null;
   last_seen_at?: string | null;
+  role_category?: string | null;
+  domain_category?: string | null;
   metadata?: Record<string, unknown> | null;
 };
 

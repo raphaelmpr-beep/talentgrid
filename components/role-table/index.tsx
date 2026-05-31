@@ -4,6 +4,11 @@ import * as React from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PocDrawer, type ChampionPOC } from "@/components/poc-drawer";
+import {
+  FindContactDrawer,
+  type FindContactTarget,
+} from "@/components/find-contact-drawer";
+import { getContactPath } from "@/lib/recruiter-intel/contact-path";
 import { cn, formatRelative } from "@/lib/utils";
 
 export type RoleRow = {
@@ -31,13 +36,29 @@ export type RoleRow = {
   posted_status?: string | null;
   discovered_at?: string | null;
   last_seen_at?: string | null;
+  role_category?: string | null;
+  domain_category?: string | null;
   metadata?: Record<string, unknown> | null;
 };
 
 export type RoleTableProps = {
   roles: RoleRow[];
   emptyMessage?: string;
+  // Company context for Recruiter Intel routing + search links. Optional so the
+  // table still renders everywhere; the contact path falls back gracefully.
+  companyName?: string | null;
+  companyDomain?: string | null;
 };
+
+// Resolve the lightweight CONTACT PATH label shown under each role. Routing is
+// pure (lib/recruiter-intel) — no scraping, no network.
+function contactPathLabel(role: RoleRow): string {
+  return getContactPath({
+    title: role.title,
+    role_category: role.role_category,
+    domain_category: role.domain_category,
+  }).contact_path_label;
+}
 
 function extractPOC(role: RoleRow): ChampionPOC | null {
   const m = role.metadata ?? {};
@@ -185,13 +206,35 @@ function postedDisplay(role: RoleRow): string {
   return "—";
 }
 
-export function RoleTable({ roles, emptyMessage }: RoleTableProps) {
+export function RoleTable({
+  roles,
+  emptyMessage,
+  companyName,
+  companyDomain,
+}: RoleTableProps) {
   const [expanded, setExpanded] = React.useState<string | null>(null);
   const [drawer, setDrawer] = React.useState<{
     open: boolean;
     poc: ChampionPOC | null;
     role: RoleRow | null;
   }>({ open: false, poc: null, role: null });
+  const [contactTarget, setContactTarget] =
+    React.useState<FindContactTarget | null>(null);
+
+  const openFindContact = React.useCallback(
+    (role: RoleRow) => {
+      setContactTarget({
+        jobId: role.id,
+        companyId: role.company_id,
+        companyName: companyName ?? null,
+        companyDomain: companyDomain ?? null,
+        jobTitle: role.title,
+        roleCategory: role.role_category ?? null,
+        domainCategory: role.domain_category ?? null,
+      });
+    },
+    [companyName, companyDomain]
+  );
 
   if (!roles.length) {
     return (
@@ -325,6 +368,15 @@ export function RoleTable({ roles, emptyMessage }: RoleTableProps) {
                 </dd>
               </dl>
 
+              <div className="mt-3 border-t border-neutral-100 pt-2 text-xs">
+                <span className="uppercase tracking-wide text-neutral-400">
+                  Contact path
+                </span>{" "}
+                <span className="font-medium text-neutral-600">
+                  {contactPathLabel(role)}
+                </span>
+              </div>
+
               <div className="mt-3 flex flex-col gap-2">
                 {role.url && (
                   <a
@@ -336,16 +388,25 @@ export function RoleTable({ roles, emptyMessage }: RoleTableProps) {
                     Apply ↗
                   </a>
                 )}
-                <Button
-                  variant="outline"
-                  className="min-h-[44px] w-full"
-                  onClick={() =>
-                    setExpanded((cur) => (cur === role.id ? null : role.id))
-                  }
-                  aria-expanded={isOpen}
-                >
-                  {isOpen ? "Hide details" : "Details"}
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    className="min-h-[44px] flex-1"
+                    onClick={() =>
+                      setExpanded((cur) => (cur === role.id ? null : role.id))
+                    }
+                    aria-expanded={isOpen}
+                  >
+                    {isOpen ? "Hide details" : "Details"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="min-h-[44px] flex-1"
+                    onClick={() => openFindContact(role)}
+                  >
+                    Find Contact
+                  </Button>
+                </div>
               </div>
 
               {isOpen && (
@@ -391,6 +452,14 @@ export function RoleTable({ roles, emptyMessage }: RoleTableProps) {
                           </>
                         )}
                       </div>
+                      <div className="mt-1 text-xs">
+                        <span className="uppercase tracking-wide text-neutral-400">
+                          Contact path
+                        </span>{" "}
+                        <span className="text-neutral-600">
+                          {contactPathLabel(role)}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-4 py-3 align-top text-neutral-700">
                       {role.location ?? (role.remote ? "Remote" : "—")}
@@ -423,16 +492,27 @@ export function RoleTable({ roles, emptyMessage }: RoleTableProps) {
                       {postedDisplay(role)}
                     </td>
                     <td className="px-4 py-3 align-top">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() =>
-                          setExpanded((cur) => (cur === role.id ? null : role.id))
-                        }
-                        aria-expanded={isOpen}
-                      >
-                        {isOpen ? "Hide" : "Details"}
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setExpanded((cur) =>
+                              cur === role.id ? null : role.id
+                            )
+                          }
+                          aria-expanded={isOpen}
+                        >
+                          {isOpen ? "Hide" : "Details"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openFindContact(role)}
+                        >
+                          Find Contact
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                   {isOpen && (
@@ -455,6 +535,12 @@ export function RoleTable({ roles, emptyMessage }: RoleTableProps) {
         companyId={drawer.role?.company_id}
         roleTitle={drawer.role?.title}
         poc={drawer.poc}
+      />
+
+      <FindContactDrawer
+        open={contactTarget !== null}
+        onClose={() => setContactTarget(null)}
+        target={contactTarget}
       />
     </>
   );

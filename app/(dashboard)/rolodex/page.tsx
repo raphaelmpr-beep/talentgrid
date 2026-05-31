@@ -16,7 +16,18 @@ type RolodexEntry = {
   phone?: string | null;
   notes?: string | null;
   tags: string[];
+  company_name?: string | null;
+  job_title?: string | null;
+  contact_path_label?: string | null;
+  verification_status?: string | null;
+  confidence_level?: string | null;
   created_at: string;
+};
+
+const VERIFICATION_LABEL: Record<string, string> = {
+  manual_review_required: "Manual review required",
+  manually_verified: "Verified",
+  unverified: "Unverified",
 };
 
 type Page<T> = { data: T[]; page: number; pageSize: number; total: number };
@@ -121,8 +132,23 @@ function RolodexCard({ entry }: { entry: RolodexEntry }) {
                 {entry.title}
               </div>
             )}
+            {(entry.company_name || entry.job_title) && (
+              <div className="truncate text-xs text-neutral-500">
+                {[entry.company_name, entry.job_title]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </div>
+            )}
           </div>
         </div>
+        {entry.contact_path_label && (
+          <div className="mt-3 text-xs">
+            <span className="uppercase tracking-wide text-neutral-400">
+              Contact path
+            </span>{" "}
+            <span className="text-neutral-600">{entry.contact_path_label}</span>
+          </div>
+        )}
         <div className="mt-3 space-y-1 text-xs">
           {entry.email && (
             <a
@@ -158,6 +184,20 @@ function RolodexCard({ entry }: { entry: RolodexEntry }) {
                 {t}
               </Badge>
             ))}
+          </div>
+        )}
+        {entry.verification_status && (
+          <div className="mt-3">
+            <Badge
+              variant={
+                entry.verification_status === "manually_verified"
+                  ? "success"
+                  : "warning"
+              }
+            >
+              {VERIFICATION_LABEL[entry.verification_status] ??
+                entry.verification_status}
+            </Badge>
           </div>
         )}
       </CardContent>

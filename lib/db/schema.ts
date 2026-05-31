@@ -148,11 +148,35 @@ export const rolodexEntries = pgTable(
     phone: text("phone"),
     notes: text("notes"),
     tags: text("tags").array().notNull().default(sql`'{}'::text[]`),
+    // Recruiter Intel fields (migration 007). User-entered or routed context for
+    // a likely recruiting contact saved from a job card. Never scraped/enriched.
+    companyName: text("company_name"),
+    jobOpeningId: uuid("job_opening_id").references(() => roles.id, {
+      onDelete: "set null",
+    }),
+    jobTitle: text("job_title"),
+    contactPathLabel: text("contact_path_label"),
+    sourceType: text("source_type").notNull().default("manual_user_entry"),
+    verificationStatus: text("verification_status")
+      .notNull()
+      .default("manual_review_required"),
+    confidenceLevel: text("confidence_level"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => ({
     userIdx: index("rolodex_user_idx").on(t.userId),
+    jobOpeningIdx: index("rolodex_entries_job_opening_idx")
+      .on(t.jobOpeningId)
+      .where(sql`${t.jobOpeningId} is not null`),
+    verificationStatusCheck: check(
+      "rolodex_entries_verification_status_check",
+      sql`${t.verificationStatus} in ('manual_review_required','manually_verified','unverified')`
+    ),
+    confidenceLevelCheck: check(
+      "rolodex_entries_confidence_level_check",
+      sql`${t.confidenceLevel} is null or ${t.confidenceLevel} in ('high','medium','low')`
+    ),
   })
 );
 

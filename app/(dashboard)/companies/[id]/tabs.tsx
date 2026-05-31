@@ -124,6 +124,8 @@ export function CompanyDetailTabs({
         <RoleTable
           roles={activeRoles}
           emptyMessage="No active roles posted right now."
+          companyName={company.name}
+          companyDomain={company.domain}
         />
       </TabsContent>
 
@@ -131,6 +133,8 @@ export function CompanyDetailTabs({
         <RoleTable
           roles={ghostRoles}
           emptyMessage="No ghost roles detected. ✨"
+          companyName={company.name}
+          companyDomain={company.domain}
         />
       </TabsContent>
 

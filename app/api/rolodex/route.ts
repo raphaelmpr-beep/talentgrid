@@ -13,6 +13,14 @@ const rolodexCreateSchema = z.object({
   phone: z.string().max(50).optional(),
   notes: z.string().max(5000).optional(),
   tags: z.array(z.string().max(50)).max(50).optional(),
+  // Recruiter Intel context (all optional; user-entered or routed). source_type
+  // and verification_status default server-side so a saved contact is never
+  // presented as a verified exact recruiter.
+  companyName: z.string().max(200).optional(),
+  jobOpeningId: z.string().uuid().optional(),
+  jobTitle: z.string().max(200).optional(),
+  contactPathLabel: z.string().max(200).optional(),
+  confidenceLevel: z.enum(["high", "medium", "low"]).optional(),
 });
 
 export async function GET(req: NextRequest) {
@@ -78,6 +86,14 @@ export async function POST(req: NextRequest) {
       phone: parsed.data.phone ?? null,
       notes: parsed.data.notes ?? null,
       tags: parsed.data.tags ?? [],
+      company_name: parsed.data.companyName ?? null,
+      job_opening_id: parsed.data.jobOpeningId ?? null,
+      job_title: parsed.data.jobTitle ?? null,
+      contact_path_label: parsed.data.contactPathLabel ?? null,
+      confidence_level: parsed.data.confidenceLevel ?? null,
+      // Compliance defaults: user-entered + needs manual verification.
+      source_type: "manual_user_entry",
+      verification_status: "manual_review_required",
     })
     .select("*")
     .single();
