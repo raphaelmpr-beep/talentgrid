@@ -1,0 +1,3390 @@
+[
+  {
+    "id": "midmarket-001",
+    "name": "Fastly",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Edge Cloud / CDN",
+    "domain_tags": [
+      "Cloud",
+      "Security",
+      "Developer Tools"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Security Engineer"
+    ],
+    "careers_url": "https://www.fastly.com/about/careers",
+    "job_portal_url": "https://www.fastly.com/about/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-002",
+    "name": "HashiCorp",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company_or_acquired",
+    "industry": "Infrastructure Software",
+    "domain_tags": [
+      "Cloud",
+      "DevOps",
+      "Security"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Product",
+      "Security Engineer"
+    ],
+    "careers_url": "https://www.hashicorp.com/careers",
+    "job_portal_url": "https://www.hashicorp.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-003",
+    "name": "Sprout Social",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Social Media Software",
+    "domain_tags": [
+      "Marketing",
+      "Enterprise Software",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://sproutsocial.com/careers/",
+    "job_portal_url": "https://sproutsocial.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-004",
+    "name": "Braze",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Customer Engagement Software",
+    "domain_tags": [
+      "Marketing",
+      "Data",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.braze.com/company/careers",
+    "job_portal_url": "https://www.braze.com/company/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-005",
+    "name": "C3.ai",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Enterprise AI Software",
+    "domain_tags": [
+      "AI",
+      "Data",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Product"
+    ],
+    "careers_url": "https://c3.ai/careers/",
+    "job_portal_url": "https://c3.ai/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-006",
+    "name": "Vimeo",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Video Software",
+    "domain_tags": [
+      "Media",
+      "Cloud",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Frontend",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://vimeo.com/jobs",
+    "job_portal_url": "https://vimeo.com/jobs",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-007",
+    "name": "Doximity",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Healthcare Software",
+    "domain_tags": [
+      "Healthcare",
+      "Data",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.doximity.com/careers",
+    "job_portal_url": "https://www.doximity.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-008",
+    "name": "Upwork",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Talent Marketplace",
+    "domain_tags": [
+      "HR",
+      "Marketplace",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.upwork.com/careers",
+    "job_portal_url": "https://www.upwork.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-009",
+    "name": "LegalZoom",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Legal Technology",
+    "domain_tags": [
+      "Legal Tech",
+      "Enterprise Software",
+      "Finance"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.legalzoom.com/careers",
+    "job_portal_url": "https://www.legalzoom.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-010",
+    "name": "Marqeta",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Payments Platform",
+    "domain_tags": [
+      "Fintech",
+      "Payments",
+      "Developer Tools"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Security Engineer"
+    ],
+    "careers_url": "https://www.marqeta.com/careers",
+    "job_portal_url": "https://www.marqeta.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-011",
+    "name": "Upstart",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "AI Lending / Fintech",
+    "domain_tags": [
+      "Fintech",
+      "AI",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Product"
+    ],
+    "careers_url": "https://www.upstart.com/careers",
+    "job_portal_url": "https://www.upstart.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-012",
+    "name": "Rocket Lab",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Space / Aerospace",
+    "domain_tags": [
+      "Space",
+      "Aerospace",
+      "Defense"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Systems Engineer",
+      "Data",
+      "Manufacturing"
+    ],
+    "careers_url": "https://www.rocketlabusa.com/careers/",
+    "job_portal_url": "https://www.rocketlabusa.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-013",
+    "name": "Phreesia",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Healthcare Software",
+    "domain_tags": [
+      "Healthcare",
+      "Data",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Security Engineer"
+    ],
+    "careers_url": "https://www.phreesia.com/careers/",
+    "job_portal_url": "https://www.phreesia.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-014",
+    "name": "Hims & Hers Health",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Digital Health",
+    "domain_tags": [
+      "Healthcare",
+      "Consumer Tech",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.hims.com/careers",
+    "job_portal_url": "https://www.hims.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-015",
+    "name": "Couchbase",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "public_company",
+    "industry": "Database Software",
+    "domain_tags": [
+      "Data",
+      "Cloud",
+      "Developer Tools"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "DevOps/SRE",
+      "Product"
+    ],
+    "careers_url": "https://www.couchbase.com/careers/",
+    "job_portal_url": "https://www.couchbase.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-016",
+    "name": "OneTrust",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Privacy / GRC Software",
+    "domain_tags": [
+      "Cybersecurity",
+      "Compliance",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Security Engineer"
+    ],
+    "careers_url": "https://www.onetrust.com/careers/",
+    "job_portal_url": "https://www.onetrust.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-017",
+    "name": "Snyk",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Developer Security",
+    "domain_tags": [
+      "Cybersecurity",
+      "Developer Tools",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "DevOps/SRE",
+      "Product"
+    ],
+    "careers_url": "https://snyk.io/careers/",
+    "job_portal_url": "https://snyk.io/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-018",
+    "name": "Miro",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Collaboration Software",
+    "domain_tags": [
+      "Enterprise Software",
+      "Productivity",
+      "Design"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Frontend",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://miro.com/careers/",
+    "job_portal_url": "https://miro.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-019",
+    "name": "Airtable",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Database / Productivity Software",
+    "domain_tags": [
+      "Enterprise Software",
+      "Data",
+      "Productivity"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Frontend",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.airtable.com/careers",
+    "job_portal_url": "https://www.airtable.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-020",
+    "name": "Brex",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Fintech / Corporate Cards",
+    "domain_tags": [
+      "Fintech",
+      "Payments",
+      "Finance"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Security Engineer"
+    ],
+    "careers_url": "https://www.brex.com/careers",
+    "job_portal_url": "https://www.brex.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-021",
+    "name": "Plaid",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Fintech Infrastructure",
+    "domain_tags": [
+      "Fintech",
+      "Developer Tools",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Security Engineer"
+    ],
+    "careers_url": "https://plaid.com/careers/",
+    "job_portal_url": "https://plaid.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-022",
+    "name": "Mistral AI",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "AI Models",
+    "domain_tags": [
+      "AI",
+      "Developer Tools",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "ML/AI",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://mistral.ai/careers/",
+    "job_portal_url": "https://mistral.ai/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-023",
+    "name": "Dataiku",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "AI / Data Platform",
+    "domain_tags": [
+      "AI",
+      "Data",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Product"
+    ],
+    "careers_url": "https://www.dataiku.com/careers/",
+    "job_portal_url": "https://www.dataiku.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-024",
+    "name": "Arctic Wolf",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Cybersecurity Operations",
+    "domain_tags": [
+      "Cybersecurity",
+      "Cloud",
+      "Data"
+    ],
+    "role_tags": [
+      "Security Engineer",
+      "Software Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://arcticwolf.com/company/careers/",
+    "job_portal_url": "https://arcticwolf.com/company/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-025",
+    "name": "Abnormal Security",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Email Security",
+    "domain_tags": [
+      "Cybersecurity",
+      "AI",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "Data",
+      "ML/AI"
+    ],
+    "careers_url": "https://abnormalsecurity.com/careers",
+    "job_portal_url": "https://abnormalsecurity.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-026",
+    "name": "Wiz",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Cloud Security",
+    "domain_tags": [
+      "Cybersecurity",
+      "Cloud",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.wiz.io/careers",
+    "job_portal_url": "https://www.wiz.io/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-027",
+    "name": "Ramp",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Spend Management / Fintech",
+    "domain_tags": [
+      "Fintech",
+      "Payments",
+      "Finance"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://ramp.com/careers",
+    "job_portal_url": "https://ramp.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-028",
+    "name": "Figma",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Design Software",
+    "domain_tags": [
+      "Design",
+      "Enterprise Software",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Frontend",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.figma.com/careers/",
+    "job_portal_url": "https://www.figma.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-029",
+    "name": "Notion",
+    "estimated_revenue_band": "$400M-$600M",
+    "annual_revenue_min_musd": 400,
+    "annual_revenue_max_musd": 600,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Productivity Software",
+    "domain_tags": [
+      "Enterprise Software",
+      "Productivity",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Frontend",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.notion.com/careers",
+    "job_portal_url": "https://www.notion.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-030",
+    "name": "Jamf",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Apple Device Management",
+    "domain_tags": [
+      "Enterprise Software",
+      "Cybersecurity",
+      "IT"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.jamf.com/about/careers/",
+    "job_portal_url": "https://www.jamf.com/about/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-031",
+    "name": "Yext",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Digital Experience Software",
+    "domain_tags": [
+      "Marketing",
+      "Enterprise Software",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.yext.com/careers",
+    "job_portal_url": "https://www.yext.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-032",
+    "name": "BigCommerce",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "E-commerce Software",
+    "domain_tags": [
+      "Retail",
+      "Enterprise Software",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Frontend",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.bigcommerce.com/company/careers/",
+    "job_portal_url": "https://www.bigcommerce.com/company/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-033",
+    "name": "Amplitude",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Product Analytics",
+    "domain_tags": [
+      "Data",
+      "Enterprise Software",
+      "Marketing"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://amplitude.com/careers",
+    "job_portal_url": "https://amplitude.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-034",
+    "name": "Health Catalyst",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Healthcare Data Analytics",
+    "domain_tags": [
+      "Healthcare",
+      "Data",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "ML/AI"
+    ],
+    "careers_url": "https://www.healthcatalyst.com/careers",
+    "job_portal_url": "https://www.healthcatalyst.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-035",
+    "name": "Definitive Healthcare",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Healthcare Data",
+    "domain_tags": [
+      "Healthcare",
+      "Data",
+      "Sales"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.definitivehc.com/careers",
+    "job_portal_url": "https://www.definitivehc.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-036",
+    "name": "Udemy",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Learning Platform",
+    "domain_tags": [
+      "Education",
+      "Marketplace",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://about.udemy.com/careers/",
+    "job_portal_url": "https://about.udemy.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-037",
+    "name": "Semrush",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Marketing Software",
+    "domain_tags": [
+      "Marketing",
+      "Data",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.semrush.com/company/careers/",
+    "job_portal_url": "https://www.semrush.com/company/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-038",
+    "name": "Olo",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Restaurant Software",
+    "domain_tags": [
+      "Retail",
+      "Payments",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.olo.com/careers",
+    "job_portal_url": "https://www.olo.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-039",
+    "name": "Zuora",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Subscription Billing Software",
+    "domain_tags": [
+      "Finance",
+      "Enterprise Software",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.zuora.com/about/careers/",
+    "job_portal_url": "https://www.zuora.com/about/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-040",
+    "name": "BlackLine",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Finance Automation Software",
+    "domain_tags": [
+      "Finance",
+      "Enterprise Software",
+      "Automation"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.blackline.com/careers/",
+    "job_portal_url": "https://www.blackline.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-041",
+    "name": "N-able",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "IT Management Software",
+    "domain_tags": [
+      "Cybersecurity",
+      "IT",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "DevOps/SRE",
+      "Product"
+    ],
+    "careers_url": "https://www.n-able.com/careers",
+    "job_portal_url": "https://www.n-able.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-042",
+    "name": "JFrog",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "DevOps Platform",
+    "domain_tags": [
+      "DevOps",
+      "Developer Tools",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://jfrog.com/careers/",
+    "job_portal_url": "https://jfrog.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-043",
+    "name": "PagerDuty",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Incident Response Software",
+    "domain_tags": [
+      "DevOps",
+      "Cloud",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.pagerduty.com/careers/",
+    "job_portal_url": "https://www.pagerduty.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-044",
+    "name": "Life360",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Consumer Safety App",
+    "domain_tags": [
+      "Consumer Tech",
+      "Mobile",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.life360.com/careers/",
+    "job_portal_url": "https://www.life360.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-045",
+    "name": "ZipRecruiter",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Hiring Marketplace",
+    "domain_tags": [
+      "HR",
+      "Marketplace",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.ziprecruiter.com/careers",
+    "job_portal_url": "https://www.ziprecruiter.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-046",
+    "name": "Planet Labs",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Satellite Data",
+    "domain_tags": [
+      "Space",
+      "Data",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Systems Engineer"
+    ],
+    "careers_url": "https://www.planet.com/company/careers/",
+    "job_portal_url": "https://www.planet.com/company/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-047",
+    "name": "Redwire",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Space Infrastructure",
+    "domain_tags": [
+      "Space",
+      "Aerospace",
+      "Defense"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Systems Engineer",
+      "Data",
+      "Manufacturing"
+    ],
+    "careers_url": "https://redwirespace.com/careers/",
+    "job_portal_url": "https://redwirespace.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-048",
+    "name": "BigBear.ai",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "AI / Defense Analytics",
+    "domain_tags": [
+      "AI",
+      "Defense",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Systems Engineer"
+    ],
+    "careers_url": "https://bigbear.ai/careers/",
+    "job_portal_url": "https://bigbear.ai/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-049",
+    "name": "TomTom",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "public_company",
+    "industry": "Mapping / Location Tech",
+    "domain_tags": [
+      "Data",
+      "Automotive",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "ML/AI"
+    ],
+    "careers_url": "https://www.tomtom.com/careers/",
+    "job_portal_url": "https://www.tomtom.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-050",
+    "name": "Postman",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "API Platform",
+    "domain_tags": [
+      "Developer Tools",
+      "Cloud",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.postman.com/company/careers/",
+    "job_portal_url": "https://www.postman.com/company/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-051",
+    "name": "LaunchDarkly",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Feature Management Software",
+    "domain_tags": [
+      "Developer Tools",
+      "Cloud",
+      "DevOps"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://launchdarkly.com/careers/",
+    "job_portal_url": "https://launchdarkly.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-052",
+    "name": "CircleCI",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "CI/CD Software",
+    "domain_tags": [
+      "DevOps",
+      "Developer Tools",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://circleci.com/careers/",
+    "job_portal_url": "https://circleci.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-053",
+    "name": "Grafana Labs",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Observability Software",
+    "domain_tags": [
+      "DevOps",
+      "Cloud",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://grafana.com/about/careers/",
+    "job_portal_url": "https://grafana.com/about/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-054",
+    "name": "Sentry",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Application Monitoring",
+    "domain_tags": [
+      "DevOps",
+      "Developer Tools",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://sentry.io/careers/",
+    "job_portal_url": "https://sentry.io/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-055",
+    "name": "Retool",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Internal Tools Platform",
+    "domain_tags": [
+      "Developer Tools",
+      "Enterprise Software",
+      "Automation"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Frontend",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://retool.com/careers",
+    "job_portal_url": "https://retool.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-056",
+    "name": "Webflow",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Website Builder / CMS",
+    "domain_tags": [
+      "Developer Tools",
+      "Design",
+      "Marketing"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Frontend",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://webflow.com/careers",
+    "job_portal_url": "https://webflow.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-057",
+    "name": "Drata",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Compliance Automation",
+    "domain_tags": [
+      "Cybersecurity",
+      "Compliance",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://drata.com/careers",
+    "job_portal_url": "https://drata.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-058",
+    "name": "Vanta",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Compliance Automation",
+    "domain_tags": [
+      "Cybersecurity",
+      "Compliance",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.vanta.com/careers",
+    "job_portal_url": "https://www.vanta.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-059",
+    "name": "Axonius",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Cyber Asset Management",
+    "domain_tags": [
+      "Cybersecurity",
+      "Data",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.axonius.com/careers",
+    "job_portal_url": "https://www.axonius.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-060",
+    "name": "Coalition",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Cyber Insurance",
+    "domain_tags": [
+      "Cybersecurity",
+      "Insurance",
+      "Finance"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.coalitioninc.com/careers",
+    "job_portal_url": "https://www.coalitioninc.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-061",
+    "name": "Shield AI",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Defense Autonomy",
+    "domain_tags": [
+      "Defense",
+      "AI",
+      "Drones"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "ML/AI",
+      "Robotics",
+      "Systems Engineer"
+    ],
+    "careers_url": "https://www.shield.ai/careers",
+    "job_portal_url": "https://www.shield.ai/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-062",
+    "name": "Skydio",
+    "estimated_revenue_band": "$250M-$400M",
+    "annual_revenue_min_musd": 250,
+    "annual_revenue_max_musd": 400,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Drones / Robotics",
+    "domain_tags": [
+      "Drones",
+      "Robotics",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "ML/AI",
+      "Robotics",
+      "Systems Engineer"
+    ],
+    "careers_url": "https://www.skydio.com/careers",
+    "job_portal_url": "https://www.skydio.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-063",
+    "name": "Matterport",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company_or_acquired",
+    "industry": "Digital Twin / 3D Capture",
+    "domain_tags": [
+      "AI",
+      "Real Estate",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Product"
+    ],
+    "careers_url": "https://matterport.com/careers",
+    "job_portal_url": "https://matterport.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-064",
+    "name": "EverQuote",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "Insurance Marketplace",
+    "domain_tags": [
+      "Insurance",
+      "Marketplace",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.everquote.com/careers/",
+    "job_portal_url": "https://www.everquote.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-065",
+    "name": "eGain",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "Customer Engagement Software",
+    "domain_tags": [
+      "Enterprise Software",
+      "AI",
+      "Customer Support"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.egain.com/company/careers/",
+    "job_portal_url": "https://www.egain.com/company/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-066",
+    "name": "LivePerson",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "Conversational AI",
+    "domain_tags": [
+      "AI",
+      "Customer Support",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Product"
+    ],
+    "careers_url": "https://www.liveperson.com/careers/",
+    "job_portal_url": "https://www.liveperson.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-067",
+    "name": "TechTarget",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "B2B Data / Media",
+    "domain_tags": [
+      "Marketing",
+      "Data",
+      "Sales"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.techtarget.com/careers/",
+    "job_portal_url": "https://www.techtarget.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-068",
+    "name": "QuinStreet",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "Performance Marketing",
+    "domain_tags": [
+      "Marketing",
+      "Data",
+      "Finance"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.quinstreet.com/careers/",
+    "job_portal_url": "https://www.quinstreet.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-069",
+    "name": "Kaltura",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "Video Platform",
+    "domain_tags": [
+      "Media",
+      "Cloud",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://corp.kaltura.com/company/careers/",
+    "job_portal_url": "https://corp.kaltura.com/company/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-070",
+    "name": "ON24",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "Webinar / Digital Events Software",
+    "domain_tags": [
+      "Marketing",
+      "Enterprise Software",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.on24.com/careers/",
+    "job_portal_url": "https://www.on24.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-071",
+    "name": "PubMatic",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "AdTech Platform",
+    "domain_tags": [
+      "Advertising",
+      "Data",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "DevOps/SRE"
+    ],
+    "careers_url": "https://pubmatic.com/careers/",
+    "job_portal_url": "https://pubmatic.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-072",
+    "name": "Magnite",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "AdTech Platform",
+    "domain_tags": [
+      "Advertising",
+      "Data",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "DevOps/SRE"
+    ],
+    "careers_url": "https://www.magnite.com/careers/",
+    "job_portal_url": "https://www.magnite.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-073",
+    "name": "Rimini Street",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "Enterprise Software Support",
+    "domain_tags": [
+      "Enterprise Software",
+      "Cloud",
+      "IT"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Support Engineer"
+    ],
+    "careers_url": "https://www.riministreet.com/careers/",
+    "job_portal_url": "https://www.riministreet.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-074",
+    "name": "Bandwidth",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "Communications Platform",
+    "domain_tags": [
+      "Telecom",
+      "Cloud",
+      "Developer Tools"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "DevOps/SRE",
+      "Product"
+    ],
+    "careers_url": "https://www.bandwidth.com/careers/",
+    "job_portal_url": "https://www.bandwidth.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-075",
+    "name": "Spire Global",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "Satellite Data",
+    "domain_tags": [
+      "Space",
+      "Data",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Systems Engineer"
+    ],
+    "careers_url": "https://spire.com/careers/",
+    "job_portal_url": "https://spire.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-076",
+    "name": "BlackSky",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "public_company",
+    "industry": "Satellite Intelligence",
+    "domain_tags": [
+      "Space",
+      "Defense",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Systems Engineer"
+    ],
+    "careers_url": "https://www.blacksky.com/careers/",
+    "job_portal_url": "https://www.blacksky.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-077",
+    "name": "Capella Space",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "SAR Satellite Data",
+    "domain_tags": [
+      "Space",
+      "Defense",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Systems Engineer"
+    ],
+    "careers_url": "https://www.capellaspace.com/careers",
+    "job_portal_url": "https://www.capellaspace.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-078",
+    "name": "Saildrone",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Autonomous Maritime Systems",
+    "domain_tags": [
+      "Drones",
+      "Robotics",
+      "Defense"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Robotics",
+      "Data",
+      "Systems Engineer"
+    ],
+    "careers_url": "https://www.saildrone.com/careers",
+    "job_portal_url": "https://www.saildrone.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-079",
+    "name": "Gecko Robotics",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Industrial Robotics",
+    "domain_tags": [
+      "Robotics",
+      "Industrial",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Robotics",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.geckorobotics.com/careers",
+    "job_portal_url": "https://www.geckorobotics.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-080",
+    "name": "Agility Robotics",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Humanoid Robotics",
+    "domain_tags": [
+      "Robotics",
+      "AI",
+      "Hardware"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Robotics",
+      "ML/AI",
+      "Hardware"
+    ],
+    "careers_url": "https://agilityrobotics.com/careers",
+    "job_portal_url": "https://agilityrobotics.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-081",
+    "name": "Figure AI",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Humanoid Robotics",
+    "domain_tags": [
+      "Robotics",
+      "AI",
+      "Hardware"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Robotics",
+      "ML/AI",
+      "Hardware"
+    ],
+    "careers_url": "https://www.figure.ai/careers",
+    "job_portal_url": "https://www.figure.ai/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-082",
+    "name": "Serve Robotics",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "candidate_estimate",
+    "industry": "Delivery Robotics",
+    "domain_tags": [
+      "Robotics",
+      "Logistics",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Robotics",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.serverobotics.com/careers",
+    "job_portal_url": "https://www.serverobotics.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-083",
+    "name": "Huntress",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Managed Cybersecurity",
+    "domain_tags": [
+      "Cybersecurity",
+      "Cloud",
+      "SMB"
+    ],
+    "role_tags": [
+      "Security Engineer",
+      "Software Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.huntress.com/careers",
+    "job_portal_url": "https://www.huntress.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-084",
+    "name": "Expel",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Managed Detection and Response",
+    "domain_tags": [
+      "Cybersecurity",
+      "Cloud",
+      "Data"
+    ],
+    "role_tags": [
+      "Security Engineer",
+      "Software Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://expel.com/careers/",
+    "job_portal_url": "https://expel.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-085",
+    "name": "Tines",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Security Automation",
+    "domain_tags": [
+      "Cybersecurity",
+      "Automation",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.tines.com/careers/",
+    "job_portal_url": "https://www.tines.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-086",
+    "name": "Material Security",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Email / Account Security",
+    "domain_tags": [
+      "Cybersecurity",
+      "Cloud",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://material.security/careers",
+    "job_portal_url": "https://material.security/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-087",
+    "name": "Chainguard",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Software Supply Chain Security",
+    "domain_tags": [
+      "Cybersecurity",
+      "Developer Tools",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "DevOps/SRE",
+      "Product"
+    ],
+    "careers_url": "https://www.chainguard.dev/careers",
+    "job_portal_url": "https://www.chainguard.dev/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-088",
+    "name": "Tailscale",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Zero Trust Networking",
+    "domain_tags": [
+      "Cybersecurity",
+      "Networking",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "DevOps/SRE",
+      "Product"
+    ],
+    "careers_url": "https://tailscale.com/careers",
+    "job_portal_url": "https://tailscale.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-089",
+    "name": "Teleport",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Infrastructure Access Security",
+    "domain_tags": [
+      "Cybersecurity",
+      "DevOps",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "DevOps/SRE",
+      "Product"
+    ],
+    "careers_url": "https://goteleport.com/careers/",
+    "job_portal_url": "https://goteleport.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-090",
+    "name": "HackerOne",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Bug Bounty / Security Testing",
+    "domain_tags": [
+      "Cybersecurity",
+      "Marketplace",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Security Engineer",
+      "Software Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.hackerone.com/careers",
+    "job_portal_url": "https://www.hackerone.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-091",
+    "name": "Bugcrowd",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Crowdsourced Security",
+    "domain_tags": [
+      "Cybersecurity",
+      "Marketplace",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Security Engineer",
+      "Software Engineer",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://www.bugcrowd.com/about/careers/",
+    "job_portal_url": "https://www.bugcrowd.com/about/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-092",
+    "name": "Sourcegraph",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Code Intelligence",
+    "domain_tags": [
+      "Developer Tools",
+      "AI",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "ML/AI",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://sourcegraph.com/jobs",
+    "job_portal_url": "https://sourcegraph.com/jobs",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-093",
+    "name": "Vercel",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Frontend Cloud Platform",
+    "domain_tags": [
+      "Cloud",
+      "Developer Tools",
+      "Web"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Frontend",
+      "DevOps/SRE",
+      "Product"
+    ],
+    "careers_url": "https://vercel.com/careers",
+    "job_portal_url": "https://vercel.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-094",
+    "name": "Replit",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "candidate_estimate",
+    "industry": "Developer Platform",
+    "domain_tags": [
+      "Developer Tools",
+      "AI",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "ML/AI",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://replit.com/careers",
+    "job_portal_url": "https://replit.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-095",
+    "name": "Render",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Cloud Platform",
+    "domain_tags": [
+      "Cloud",
+      "Developer Tools",
+      "DevOps"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://render.com/careers",
+    "job_portal_url": "https://render.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-096",
+    "name": "Fly.io",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "candidate_estimate",
+    "industry": "Cloud Platform",
+    "domain_tags": [
+      "Cloud",
+      "Developer Tools",
+      "DevOps"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://fly.io/jobs/",
+    "job_portal_url": "https://fly.io/jobs/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-097",
+    "name": "Supabase",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "candidate_estimate",
+    "industry": "Database / Backend Platform",
+    "domain_tags": [
+      "Developer Tools",
+      "Cloud",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "DevOps/SRE",
+      "Product"
+    ],
+    "careers_url": "https://supabase.com/careers",
+    "job_portal_url": "https://supabase.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-098",
+    "name": "Clerk",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "candidate_estimate",
+    "industry": "Authentication Platform",
+    "domain_tags": [
+      "Developer Tools",
+      "Security",
+      "Cloud"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Security Engineer",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://clerk.com/careers",
+    "job_portal_url": "https://clerk.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-099",
+    "name": "Linear",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "candidate_estimate",
+    "industry": "Work Tracking Software",
+    "domain_tags": [
+      "Productivity",
+      "Enterprise Software",
+      "Developer Tools"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Frontend",
+      "Data",
+      "Product"
+    ],
+    "careers_url": "https://linear.app/careers",
+    "job_portal_url": "https://linear.app/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-100",
+    "name": "Mercury",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Fintech Banking Platform",
+    "domain_tags": [
+      "Fintech",
+      "Finance",
+      "Payments"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Security Engineer"
+    ],
+    "careers_url": "https://mercury.com/jobs",
+    "job_portal_url": "https://mercury.com/jobs",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-101",
+    "name": "Airbase",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Spend Management",
+    "domain_tags": [
+      "Fintech",
+      "Finance",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.airbase.com/careers",
+    "job_portal_url": "https://www.airbase.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-102",
+    "name": "Modern Treasury",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Payments Operations",
+    "domain_tags": [
+      "Fintech",
+      "Payments",
+      "Developer Tools"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Security Engineer"
+    ],
+    "careers_url": "https://www.moderntreasury.com/careers",
+    "job_portal_url": "https://www.moderntreasury.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-103",
+    "name": "Lithic",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Card Issuing Platform",
+    "domain_tags": [
+      "Fintech",
+      "Payments",
+      "Developer Tools"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Security Engineer"
+    ],
+    "careers_url": "https://lithic.com/careers",
+    "job_portal_url": "https://lithic.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-104",
+    "name": "Persona",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Identity Verification",
+    "domain_tags": [
+      "Identity",
+      "Fintech",
+      "Cybersecurity"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Security Engineer"
+    ],
+    "careers_url": "https://withpersona.com/careers",
+    "job_portal_url": "https://withpersona.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-105",
+    "name": "Socure",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Identity Verification / Fraud",
+    "domain_tags": [
+      "Identity",
+      "Fintech",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Product"
+    ],
+    "careers_url": "https://www.socure.com/careers",
+    "job_portal_url": "https://www.socure.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-106",
+    "name": "Unit21",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "candidate_estimate",
+    "industry": "Fraud / AML Software",
+    "domain_tags": [
+      "Fintech",
+      "Cybersecurity",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Security Engineer"
+    ],
+    "careers_url": "https://www.unit21.ai/careers",
+    "job_portal_url": "https://www.unit21.ai/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-107",
+    "name": "Komodo Health",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Healthcare Data",
+    "domain_tags": [
+      "Healthcare",
+      "Data",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Product"
+    ],
+    "careers_url": "https://www.komodohealth.com/careers",
+    "job_portal_url": "https://www.komodohealth.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-108",
+    "name": "Aledade",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Value-Based Care Technology",
+    "domain_tags": [
+      "Healthcare",
+      "Data",
+      "Enterprise Software"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "ML/AI"
+    ],
+    "careers_url": "https://www.aledade.com/careers",
+    "job_portal_url": "https://www.aledade.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-109",
+    "name": "Cedar",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Healthcare Billing Software",
+    "domain_tags": [
+      "Healthcare",
+      "Fintech",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.cedar.com/careers",
+    "job_portal_url": "https://www.cedar.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-110",
+    "name": "Benchling",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Life Sciences Software",
+    "domain_tags": [
+      "Healthcare",
+      "Life Sciences",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.benchling.com/careers",
+    "job_portal_url": "https://www.benchling.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-111",
+    "name": "Insitro",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "AI Drug Discovery",
+    "domain_tags": [
+      "Healthcare",
+      "AI",
+      "Life Sciences"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Product"
+    ],
+    "careers_url": "https://www.insitro.com/careers",
+    "job_portal_url": "https://www.insitro.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-112",
+    "name": "Tempus AI",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "candidate_estimate",
+    "industry": "Precision Medicine / AI",
+    "domain_tags": [
+      "Healthcare",
+      "AI",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "ML/AI",
+      "Product"
+    ],
+    "careers_url": "https://www.tempus.com/careers/",
+    "job_portal_url": "https://www.tempus.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-113",
+    "name": "Modernizing Medicine",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Healthcare Software",
+    "domain_tags": [
+      "Healthcare",
+      "Enterprise Software",
+      "Data"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Product",
+      "Frontend"
+    ],
+    "careers_url": "https://www.modmed.com/careers/",
+    "job_portal_url": "https://www.modmed.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-114",
+    "name": "Radiance Technologies",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Defense Contractor",
+    "domain_tags": [
+      "Defense",
+      "Cybersecurity",
+      "Engineering"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Systems Engineer",
+      "Cybersecurity",
+      "Data"
+    ],
+    "careers_url": "https://www.radiancetech.com/careers/",
+    "job_portal_url": "https://www.radiancetech.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-115",
+    "name": "Applied Research Associates",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Defense / Engineering R&D",
+    "domain_tags": [
+      "Defense",
+      "Engineering",
+      "Cybersecurity"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Systems Engineer",
+      "Cybersecurity",
+      "Data"
+    ],
+    "careers_url": "https://www.ara.com/careers/",
+    "job_portal_url": "https://www.ara.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-116",
+    "name": "Systems Planning and Analysis",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Defense Advisory / Analytics",
+    "domain_tags": [
+      "Defense",
+      "Data",
+      "Consulting"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Systems Engineer",
+      "Data",
+      "Cybersecurity"
+    ],
+    "careers_url": "https://www.spa.com/careers/",
+    "job_portal_url": "https://www.spa.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-117",
+    "name": "Two Six Technologies",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Defense Technology",
+    "domain_tags": [
+      "Defense",
+      "Cybersecurity",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Cybersecurity",
+      "Data",
+      "ML/AI"
+    ],
+    "careers_url": "https://twosixtech.com/careers/",
+    "job_portal_url": "https://twosixtech.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-118",
+    "name": "Eqlipse Technologies",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "National Security Technology",
+    "domain_tags": [
+      "Defense",
+      "Cybersecurity",
+      "AI"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Cybersecurity",
+      "Systems Engineer",
+      "Data"
+    ],
+    "careers_url": "https://www.eqlipsetechnologies.com/careers/",
+    "job_portal_url": "https://www.eqlipsetechnologies.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-119",
+    "name": "Barbaricum",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "estimated_private",
+    "industry": "Government Services",
+    "domain_tags": [
+      "Defense",
+      "Data",
+      "Consulting"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "Data",
+      "Cybersecurity",
+      "Program Manager"
+    ],
+    "careers_url": "https://barbaricum.com/careers/",
+    "job_portal_url": "https://barbaricum.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-120",
+    "name": "Raft",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "candidate_estimate",
+    "industry": "Defense Software / Platform Engineering",
+    "domain_tags": [
+      "Defense",
+      "Cloud",
+      "DevOps"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Cybersecurity"
+    ],
+    "careers_url": "https://teamraft.com/careers/",
+    "job_portal_url": "https://teamraft.com/careers/",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  },
+  {
+    "id": "midmarket-121",
+    "name": "Omni Federal",
+    "estimated_revenue_band": "$100M-$250M",
+    "annual_revenue_min_musd": 100,
+    "annual_revenue_max_musd": 250,
+    "revenue_verification_level": "candidate_estimate",
+    "industry": "Defense Software",
+    "domain_tags": [
+      "Defense",
+      "Cloud",
+      "Cybersecurity"
+    ],
+    "role_tags": [
+      "Software Engineer",
+      "DevOps/SRE",
+      "Data",
+      "Cybersecurity"
+    ],
+    "careers_url": "https://www.omnifederal.com/careers",
+    "job_portal_url": "https://www.omnifederal.com/careers",
+    "website_url": null,
+    "country": "US",
+    "source_status": "needs_live_http_validation",
+    "fetch_enabled": false,
+    "validation_enabled": true,
+    "notes": "Candidate seed record for TalentGrid $100M-$600M revenue band. Verify latest revenue and active job source before using as audited company data."
+  }
+]

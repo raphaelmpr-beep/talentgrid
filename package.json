@@ -9,11 +9,17 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "import:companies": "tsx scripts/import-companies.ts",
+    "import:midmarket": "tsx scripts/import-midmarket-candidates.ts",
+    "import:midmarket:dry-run": "tsx scripts/import-midmarket-candidates.ts -- --dry-run",
+    "build:midmarket-validation-seed": "tsx scripts/build-midmarket-validation-seed.ts",
     "validate:open-roles": "tsx scripts/validate-open-roles.ts",
     "validate:open-roles:sample": "tsx scripts/validate-open-roles.ts -- --limit=10",
+    "validate:midmarket": "tsx scripts/validate-open-roles.ts scripts/data/midmarket/midmarket-open-roles-validation-seed.json scripts/data/midmarket/midmarket-open-roles-validation-report.json",
+    "validate:midmarket:sample": "tsx scripts/validate-open-roles.ts scripts/data/midmarket/midmarket-open-roles-validation-seed.json scripts/data/midmarket/midmarket-open-roles-validation-report.json -- --only=Fastly,HashiCorp,Sprout Social",
     "smoke:careers-portal": "tsx scripts/careers-portal-smoke.ts",
     "smoke:company-search": "tsx scripts/company-search-smoke.ts",
-    "smoke:open-roles": "tsx scripts/validate-open-roles-smoke.ts"
+    "smoke:open-roles": "tsx scripts/validate-open-roles-smoke.ts",
+    "smoke:midmarket": "tsx scripts/midmarket-candidates-smoke.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

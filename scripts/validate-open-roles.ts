@@ -413,8 +413,18 @@ async function runPool<T, R>(
 function selectCompanies(all: SeedCompany[], cli: Cli): SeedCompany[] {
   let selected = all;
   if (cli.only) {
-    const needle = cli.only.toLowerCase();
-    selected = selected.filter((c) => c.company_name.toLowerCase().includes(needle));
+    // --only accepts a comma-separated list so a multi-company sample (e.g.
+    // "Fastly,HashiCorp,Sprout Social") can be validated in one run. A company
+    // matches when its name contains any of the listed substrings.
+    const needles = cli.only
+      .split(",")
+      .map((n) => n.trim().toLowerCase())
+      .filter(Boolean);
+    if (needles.length > 0) {
+      selected = selected.filter((c) =>
+        needles.some((needle) => c.company_name.toLowerCase().includes(needle))
+      );
+    }
   }
   if (cli.limit != null) selected = selected.slice(0, cli.limit);
   return selected;
