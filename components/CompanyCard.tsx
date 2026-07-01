@@ -101,6 +101,7 @@ export function CompanyCard({
         return {
           tone: "warn" as const,
           text: "Validation pending — source count not exact yet",
+          shortText: "Validation pending",
         };
       case "non_exact_sample_withheld":
         return {
@@ -179,7 +180,7 @@ export function CompanyCard({
                 </p>
               </>
             ) : (
-              <p className="text-sm font-medium text-neutral-700">{primaryLine.label}</p>
+              <p className="max-w-[130px] text-right text-sm font-medium leading-tight text-neutral-700 sm:max-w-none">{primaryLine.label}</p>
             )}
             {subLine && (
               <p className="mt-0.5 text-xs font-medium text-neutral-500 tabular-nums">
@@ -190,7 +191,10 @@ export function CompanyCard({
         </div>
 
         {countNote && (
-          <p className={`text-xs font-medium ${noteToneClass}`}>{countNote.text}</p>
+          <p className={`text-xs font-medium ${noteToneClass}`}>
+            <span className="sm:hidden">{(countNote as { tone: string; text: string; shortText?: string }).shortText ?? countNote.text}</span>
+            <span className="hidden sm:inline">{countNote.text}</span>
+          </p>
         )}
 
         <div className="flex flex-wrap gap-2">
@@ -205,18 +209,16 @@ export function CompanyCard({
           )}
         </div>
 
-        <div className="space-y-1 min-w-0">
-          <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Top roles</p>
-          {topRoles.length > 0 ? (
-            topRoles.map((item) => (
+        {topRoles.length > 0 && (
+          <div className="space-y-1 min-w-0">
+            <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Top roles</p>
+            {topRoles.map((item) => (
               <p key={item.role} className="break-words text-sm text-neutral-700">
                 {item.role} ({item.count})
               </p>
-            ))
-          ) : (
-            <p className="text-sm text-neutral-500">No role breakdown available.</p>
-          )}
-        </div>
+            ))}
+          </div>
+        )}
 
         <div className="rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-700">
           <p>
