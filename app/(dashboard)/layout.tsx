@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useState } from "react";
 
 const nav = [
-  { href: "/companies", label: "Companies" },
-  { href: "/rolodex", label: "Rolodex" },
-  { href: "/favorites", label: "Favorites" },
+  { href: "/companies",    label: "Companies" },
+  { href: "/aging-roles", label: "Aging Roles" },
+  { href: "/rolodex",     label: "Rolodex" },
+  { href: "/favorites",   label: "Favorites" },
 ];
 
 export default function DashboardLayout({
