@@ -1605,7 +1605,7 @@ export async function GET(req: NextRequest) {
   const scopedCompanyIds = pipelineCompanies.map((company) => company.id);
   const { data: roleRows, error: rolesErr } = await fetchAllActiveRoles(
     supabase,
-    "id,company_id,external_id,source,title,description,location,remote,employment_type,seniority,salary_min,salary_max,url,ghost_score,posted_at,created_at,metadata",
+    "id,company_id,external_id,source,title,salary_min,salary_max,ghost_score,posted_at,created_at",
     scopedCompanyIds
   );
 

@@ -134,7 +134,7 @@ export async function GET(
   const { data, error } = await supabase
     .from("roles")
     .select(
-      "id,company_id,external_id,source,title,description,location,remote,employment_type,seniority,salary_min,salary_max,compensation_min,compensation_max,compensation_currency,compensation_period,compensation_text,compensation_source,compensation_status,url,ghost_score,posted_at,posted_status,discovered_at,last_seen_at,created_at,role_category,domain_category,metadata"
+      "id,company_id,external_id,source,title,salary_min,salary_max,ghost_score,posted_at,created_at,is_active"
     )
     .eq("company_id", id)
     .eq("is_active", true)
