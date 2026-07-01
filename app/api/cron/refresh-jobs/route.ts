@@ -279,7 +279,84 @@ async function inferAtsHintsFromRoles(
 
 // Map a careers-portal job into the same role row shape used for TheirStack,
 // so the upsert path is identical. external_id is stable across runs.
+// Extract posted_at from the vendor-specific raw job object.
+// Priority: first_published (GH) > publishedAt (Ashby) > createdAt > updated_at.
+function rawPostedAt(job: CareersPortalJob): string | null {
+  const r = job.raw;
+  if (!r) return null;
+  const str = (v: unknown): string | null =>
+    typeof v === "string" && v.trim() ? v.trim() : null;
+  return (
+    str(r["first_published"]) ??
+    str(r["publishedAt"]) ??
+    str(r["createdAt"]) ??
+    str(r["updated_at"]) ??
+    null
+  );
+}
+
+// Extract compensation from the vendor-specific raw job object.
+// Greenhouse: no compensation in public board API (metadata array is custom fields).
+// Ashby: compensation.summaryComponents[] — find the Salary entry for min/max.
+// Lever: compensation rarely in public API, skip.
+function rawCompensation(job: CareersPortalJob): {
+  comp_min: number | null;
+  comp_max: number | null;
+  comp_currency: string | null;
+  comp_period: string | null;
+  comp_text: string | null;
+  comp_source: string | null;
+  comp_status: "disclosed" | "unavailable";
+} {
+  const none = {
+    comp_min: null, comp_max: null, comp_currency: null,
+    comp_period: null, comp_text: null, comp_source: null,
+    comp_status: "unavailable" as const,
+  };
+  const r = job.raw;
+  if (!r) return none;
+
+  // Ashby: { compensation: { summaryComponents: [{ compensationType, interval,
+  //   currencyCode, minValue, maxValue }] } }
+  if (job.ats_vendor === "ashby") {
+    const comp = r["compensation"];
+    if (!comp || typeof comp !== "object") return none;
+    const compObj = comp as Record<string, unknown>;
+    // shouldDisplayCompensationOnJobPostings gates disclosure.
+    if (r["shouldDisplayCompensationOnJobPostings"] === false) return none;
+    const summary = Array.isArray(compObj["summaryComponents"])
+      ? (compObj["summaryComponents"] as Array<Record<string, unknown>>)
+      : [];
+    // Pick the primary Salary component (prefer yearly).
+    const salary = summary.find(
+      (c) => c["compensationType"] === "Salary" && c["interval"] === "1 YEAR"
+    ) ?? summary.find((c) => c["compensationType"] === "Salary");
+    if (!salary) return none;
+    const min = typeof salary["minValue"] === "number" ? salary["minValue"] : null;
+    const max = typeof salary["maxValue"] === "number" ? salary["maxValue"] : null;
+    const currency = typeof salary["currencyCode"] === "string" ? salary["currencyCode"] : "USD";
+    // Ashby interval is "1 YEAR" or "1 HOUR" etc — normalise to our period.
+    const intervalRaw = typeof salary["interval"] === "string" ? salary["interval"] : "";
+    const period = intervalRaw.includes("HOUR") ? "hour"
+      : intervalRaw.includes("MONTH") ? "month"
+      : intervalRaw.includes("WEEK") ? "week"
+      : "year";
+    const text = typeof compObj["scrapeableCompensationSalarySummary"] === "string"
+      ? compObj["scrapeableCompensationSalarySummary"] as string
+      : null;
+    if (min == null && max == null) return none;
+    return {
+      comp_min: min, comp_max: max, comp_currency: currency,
+      comp_period: period, comp_text: text, comp_source: "ats_api",
+      comp_status: "disclosed",
+    };
+  }
+
+  return none;
+}
+
 function mapCareersPortalJobToRole(job: CareersPortalJob) {
+  const comp = rawCompensation(job);
   return {
     external_id: job.external_id,
     title: job.title,
@@ -292,7 +369,16 @@ function mapCareersPortalJobToRole(job: CareersPortalJob) {
     salary_max: null as number | null,
     url: job.url,
     source: "careers_portal" as const,
-    posted_at: null as string | null,
+    // Use the vendor-specific date field; falls back to null for HTML sources.
+    posted_at: rawPostedAt(job),
+    // Compensation from ATS API when available (Ashby discloses structured comp).
+    compensation_min:      comp.comp_min,
+    compensation_max:      comp.comp_max,
+    compensation_currency: comp.comp_currency,
+    compensation_period:   comp.comp_period,
+    compensation_text:     comp.comp_text,
+    compensation_source:   comp.comp_source,
+    compensation_status:   comp.comp_status,
     metadata: { external_id: job.external_id, source_url: job.source_url },
     is_active: true as const,
   };

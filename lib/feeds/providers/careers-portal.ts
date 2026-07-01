@@ -636,7 +636,8 @@ function ashbyBoard(slug: string): AtsBoard {
 function greenhouseBoard(slug: string): AtsBoard {
   return {
     vendor: "greenhouse",
-    apiUrl: `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs`,
+    // content=true adds first_published (real post date) to each job object.
+    apiUrl: `https://boards-api.greenhouse.io/v1/boards/${encodeURIComponent(slug)}/jobs?content=true`,
     baseUrl: `https://boards.greenhouse.io/${encodeURIComponent(slug)}`,
   };
 }
