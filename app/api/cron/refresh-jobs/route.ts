@@ -34,6 +34,9 @@ type MonitoredCompany = {
   domain: string | null;
   industry: string | null;
   description: string | null;
+  // careers_url is a top-level column in the live schema (not inside metadata).
+  careers_url: string | null;
+  // metadata is optional — does not exist in current production DB.
   metadata: Record<string, unknown> | null;
 };
 
@@ -139,37 +142,38 @@ const COMPANY_BUDGET_MS = 20000;
 // total is always exact, independent of this sample size.
 const CAREERS_SAMPLE_MAX = 500;
 
-// Pull the careers/ATS portal URLs + ATS routing hints the import utility
-// stored in companies.metadata. Returns nulls when absent.
+// Pull the careers/ATS portal URLs + ATS routing hints for a company.
+// careers_url is a first-class column in the live DB schema; ATS hints live in
+// companies.metadata when present — fall back gracefully when absent.
 function careersUrlsFor(company: MonitoredCompany): {
   careersUrl: string | null;
   jobPortalUrl: string | null;
   atsType: string | null;
   atsSlug: string | null;
 } {
-  const meta = company.metadata ?? {};
   const str = (v: unknown): string | null =>
     typeof v === "string" && v.trim() ? v.trim() : null;
+  // careers_url is a first-class column in the current live schema.
+  const careersUrl = str(company.careers_url);
+  // Read ATS hints from metadata when present; default to null otherwise.
+  const meta = company.metadata ?? {};
   const source =
     meta.company_job_source && typeof meta.company_job_source === "object"
       ? (meta.company_job_source as Record<string, unknown>)
       : {};
   return {
-    careersUrl: str(meta.careers_url),
+    careersUrl: careersUrl ?? str(meta.careers_url),
     jobPortalUrl: str(meta.job_portal_url),
-    // ats_type/ats_slug are top-level shortcuts; company_job_source may also
-    // carry them under its own keys.
     atsType: str(meta.ats_type) ?? str(source.ats_type) ?? str(source.type) ?? str(source.provider),
     atsSlug: str(meta.ats_slug) ?? str(source.ats_slug) ?? str(source.slug) ?? str(source.board),
   };
 }
 
-// Read the candidate-trust flags the importer stored on companies.metadata.
-// fetch_enabled gates whether a source has been promoted past the candidate
-// stage; validation_enabled gates whether the source may be exercised at all;
-// source_status carries the needs_* mapping state. Defaults mirror the importer
-// (fetch_enabled=false, validation_enabled=true) so an un-flagged legacy row is
-// treated as a not-yet-promoted candidate rather than fetch-promoted.
+// Read the candidate-trust flags for a company. These were previously stored on
+// companies.metadata; the current live DB does not have that column, so we read
+// from it opportunistically and fall back to safe defaults.
+// fetch_enabled=true for manually seeded rows that have a careers_url — they
+// are known-good sources, not unvalidated third-party imports.
 function candidateFlagsFor(company: MonitoredCompany): {
   fetchEnabled: boolean;
   validationEnabled: boolean;
@@ -181,7 +185,9 @@ function candidateFlagsFor(company: MonitoredCompany): {
   const str = (v: unknown): string | null =>
     typeof v === "string" && v.trim() ? v.trim() : null;
   return {
-    fetchEnabled: bool(meta.fetch_enabled, false),
+    // Default fetch_enabled=true for companies with a careers_url but no
+    // metadata flags — manually seeded rows, not unvalidated candidates.
+    fetchEnabled: bool(meta.fetch_enabled, Boolean(company.careers_url)),
     validationEnabled: bool(meta.validation_enabled, true),
     sourceStatus: str(meta.source_status),
   };
@@ -401,7 +407,9 @@ async function loadMonitoredCompanies(
 
   const pageBuilder = supabase
     .from("companies")
-    .select("id,name,domain,industry,description,metadata");
+    // careers_url is a first-class column; metadata does not exist in the
+    // current production DB (omitting it avoids a 42703 that returns 0 rows).
+    .select("id,name,domain,industry,description,careers_url");
   const filtered = applyMonitorFilters(
     pageBuilder as unknown as MonitorFilterBuilder,
     query
@@ -719,27 +727,19 @@ async function persistSourceTotal(
   report: RefreshCompanyReport,
   resolved: { careersUrl: string | null; atsType: string | null; atsSlug: string | null }
 ): Promise<void> {
-  const prior = company.metadata ?? {};
-  const metadata: Record<string, unknown> = {
-    ...prior,
-    source_openings_total: report.careers_portal_total,
-    source_openings_source: report.careers_portal_source ?? "careers_portal",
-    // Whether the persisted total is the vendor-reported exact live inventory
-    // (true) or a best-effort scrape sample (false). The companies API treats an
-    // exact total as the authoritative cap; a non-exact total is a lower bound.
-    source_openings_exact: report.careers_portal_count_exact ?? false,
-    source_openings_checked_at: new Date().toISOString(),
+  // The live DB does not have a metadata column — persist via is_hiring only.
+  // Backfill inferred careers_url onto the company row when it resolved from
+  // inference and the row didn't have one yet (careers_url is a first-class col).
+  const updatePayload: Record<string, unknown> = {
+    is_hiring: report.careers_portal_total > 0,
   };
-  // Backfill inferred careers/ATS pointers onto a legacy row so future loads and
-  // the scheduled cron can resolve the board without re-inferring. Never clobber
-  // an existing value.
-  if (resolved.careersUrl && !prior.careers_url) metadata.careers_url = resolved.careersUrl;
-  if (resolved.atsType && !prior.ats_type) metadata.ats_type = resolved.atsType;
-  if (resolved.atsSlug && !prior.ats_slug) metadata.ats_slug = resolved.atsSlug;
+  if (resolved.careersUrl && !company.careers_url) {
+    updatePayload.careers_url = resolved.careersUrl;
+  }
 
   const { error } = await supabase
     .from("companies")
-    .update({ metadata, is_hiring: report.careers_portal_total > 0 })
+    .update(updatePayload)
     .eq("id", company.id);
   if (error) {
     report.errors.push(`source_total_persist_failed: ${error.message}`);
