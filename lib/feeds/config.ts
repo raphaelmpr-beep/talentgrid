@@ -17,7 +17,10 @@ export type ProviderConfig = {
 
 function readEnv(name: string): string | undefined {
   const v = process.env[name];
-  return v && v.trim().length > 0 ? v : undefined;
+  // Strip ASCII whitespace AND Unicode space variants (e.g. U+2009 thin space
+  // inserted by mobile keyboards) that .trim() does not remove.
+  const cleaned = v?.replace(/^[\s\u00A0\u2000-\u200B\u2009\u202F\uFEFF]+|[\s\u00A0\u2000-\u200B\u2009\u202F\uFEFF]+$/g, "");
+  return cleaned && cleaned.length > 0 ? cleaned : undefined;
 }
 
 export function theirStackConfig(): ProviderConfig {

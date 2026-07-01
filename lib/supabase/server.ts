@@ -2,9 +2,15 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 
+/** Strip Unicode whitespace variants (e.g. U+2009 thin space from mobile keyboards). */
+function sanitizeEnv(v: string | undefined): string | undefined {
+  const c = v?.replace(/^[\s\u00A0\u2000-\u200B\u2009\u202F\uFEFF]+|[\s\u00A0\u2000-\u200B\u2009\u202F\uFEFF]+$/g, "");
+  return c && c.length > 0 ? c : undefined;
+}
+
 export async function createClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  const url = sanitizeEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const anonKey = sanitizeEnv(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
   if (!url || !anonKey) return null;
 
   const cookieStore = await cookies();
