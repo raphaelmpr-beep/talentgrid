@@ -4,6 +4,8 @@ export const RECRUIT_TALENT_MAX_PAGE_SIZE = 25;
 
 const TRUSTED_ATS = new Set(['greenhouse', 'lever', 'ashby', 'workday']);
 
+export const RECRUIT_TALENT_SECONDARY_SORT = 'id';
+
 export type FeedParams = {
   page: number;
   pageSize: number;
@@ -29,6 +31,8 @@ export type FeedJob = {
     status: string;
   } | null;
   postedAt: string | null;
+  postedDateType: 'employer_confirmed' | 'first_seen' | 'unavailable';
+  firstSeenAt: string | null;
   lastVerifiedAt: string;
   source: string;
   originalUrl: string;
@@ -48,6 +52,8 @@ export type FeedRoleRow = {
   is_active: boolean;
   ghost_score: number | null;
   posted_at: string | null;
+  posted_status: string | null;
+  discovered_at: string | null;
   last_checked_at: string | null;
   compensation_min: number | string | null;
   compensation_max: number | string | null;
@@ -142,7 +148,15 @@ export function mapVerifiedRole(row: FeedRoleRow, now: Date = new Date()): FeedJ
     seniority: optionalText(row.seniority, 80),
     descriptionExcerpt: optionalText(row.description, 650),
     compensation,
-    postedAt: row.posted_at,
+    postedAt: row.posted_status === 'exact' ? row.posted_at : null,
+    postedDateType: row.posted_status === 'exact'
+      ? 'employer_confirmed'
+      : row.posted_status === 'inferred_from_discovered_at'
+        ? 'first_seen'
+        : 'unavailable',
+    firstSeenAt: row.posted_status === 'inferred_from_discovered_at'
+      ? row.discovered_at ?? row.posted_at
+      : null,
     lastVerifiedAt: new Date(verifiedAt).toISOString(),
     source,
     originalUrl,

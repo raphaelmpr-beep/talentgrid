@@ -10,17 +10,19 @@ Authentication: `Authorization: Bearer <RECRUIT_TALENT_FEED_TOKEN>` (server-to-s
 
 Supported optional query parameters: `q` (job title), `location`, `remote=true|false`, `page=1..20`, and `pageSize=1..25`.
 
-Response: `{jobs, pagination, asOf, source, notice}`. Each result includes id, title, employer, location, remote status, employment type, seniority, up to 650 characters of job-description excerpt, compensation only when evidenced, dates, exact ATS source, and original HTTPS posting URL. `recruiterRepresented` is always `false` for external results.
+Response: `{jobs, pagination, asOf, source, notice}`. Each result includes id, title, employer, location, remote status, employment type, seniority, up to 650 characters of job-description excerpt, compensation only when evidenced, dates, exact ATS source, and original HTTPS posting URL. `postedAt` is set only when the ATS confirms an exact publication date. Inferred ingestion dates are instead returned as `firstSeenAt` with `postedDateType: "first_seen"` and are not represented as employer publication dates. `recruiterRepresented` is always `false` for external results.
 
-Only `careers_portal` roles with vetted ATS vendors (Greenhouse, Lever, Ashby, Workday), `is_active=true`, ghost score below 40, and `last_checked_at` within 30 days are returned. No synthetic fallback jobs or inferred salaries.
+Only `careers_portal` roles with vetted ATS vendors (Greenhouse, Lever, Ashby, Workday), `is_active=true`, ghost score below 40, and `last_checked_at` within 30 days are returned. Results sort by `last_checked_at` descending, then `id` ascending, so equal freshness timestamps have a stable order across pages. No synthetic fallback jobs or inferred salaries.
 
 ## Configuration
 
-Set the same random, high-entropy **minimum 32-character** `RECRUIT_TALENT_FEED_TOKEN` as a **server-only** environment variable in TalentGrid and in the Recruit Talent Vercel project. Do not reuse TalentGrid's feed-admin, cron or Supabase keys. Ensure TalentGrid's Supabase server configuration is already functional. Rotate the token if compromised.
+Set the same random, high-entropy **minimum 32-character** `RECRUIT_TALENT_FEED_TOKEN` as a **server-only Preview** environment variable in TalentGrid and in the Recruit Talent Vercel project. Set `TALENTGRID_FEED_URL` only in Recruit Talent to the HTTPS URL of TalentGrid's Preview. Do not reuse TalentGrid's feed-admin, cron or Supabase keys. Ensure TalentGrid's Supabase server configuration is already functional. Rotate the token if compromised.
 
-For a static Recruit Talent website, add the accompanying `api/jobs.mjs` server-side proxy to its repository. Browser calls its own `/api/jobs`, never TalentGrid directly. Set `TALENTGRID_FEED_URL` in Recruit Talent to the exact HTTPS base URL of the TalentGrid deployment and its feed token on the **server only**.
+Protect both Vercel Preview deployments using Deployment Protection (Vercel Authentication or password protection) before adding the secret, and restrict access to intended reviewers. Confirm the Vercel projects use their existing repository connection and root directories. Keep the existing successful `talentgridv2` project configuration; do not promote a Preview to Production.
 
-## Verification on a reviewed non-production deployment
+For a static Recruit Talent website, add the accompanying `api/jobs.mjs` server-side proxy to its repository. Browser calls its own `/api/jobs`, never TalentGrid directly. Set `TALENTGRID_FEED_URL` in Recruit Talent to the exact HTTPS base URL of the protected TalentGrid Preview.
+
+## Verification on protected non-production deployments
 
 1. With no `RECRUIT_TALENT_FEED_TOKEN`, GET should return 503.
 2. With a wrong/empty Authorization header, GET should return 401.
@@ -28,6 +30,7 @@ For a static Recruit Talent website, add the accompanying `api/jobs.mjs` server-
 4. Confirm no metadata, raw vendor payloads, Supabase keys, contacts, or candidates appear in the response.
 5. Confirm original employer application URLs work. Check that no source violates redistribution terms.
 6. If feed is empty, inspect TalentGrid ingestion freshness and source validation. Do not fabricate jobs.
+7. Verify Recruit Talent's `/api/jobs` proxy without exposing the token in browser network requests or client assets.
 
 ## Development / testing
 

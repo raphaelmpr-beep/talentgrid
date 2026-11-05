@@ -5,6 +5,7 @@ import {
   mapVerifiedRole,
   parseFeedParams,
   RECRUIT_TALENT_MAX_AGE_DAYS,
+  RECRUIT_TALENT_SECONDARY_SORT,
   type FeedRoleRow,
 } from '@/lib/integrations/recruit-talent-feed';
 
@@ -49,6 +50,7 @@ export async function GET(req: NextRequest) {
   const columns = [
     'id', 'title', 'description', 'location', 'remote', 'employment_type',
     'seniority', 'url', 'source', 'is_active', 'ghost_score', 'posted_at',
+    'posted_status', 'discovered_at',
     'last_checked_at', 'compensation_min', 'compensation_max',
     'compensation_currency', 'compensation_period', 'compensation_status',
     'metadata', 'companies(name)',
@@ -63,13 +65,15 @@ export async function GET(req: NextRequest) {
     .eq('source', 'careers_portal')
     .filter('metadata->>ats_vendor', 'in', ALLOWED_ATS)
     .gte('last_checked_at', freshnessFloor)
-    .not('url', 'is', null)
-    .order('last_checked_at', { ascending: false });
+    .not('url', 'is', null);
   if (params.query) query = query.ilike('title', `%${params.query}%`);
   if (params.location) query = query.ilike('location', `%${params.location}%`);
   if (params.remote !== undefined) query = query.eq('remote', params.remote);
 
-  const { data, count, error } = await query.range(offset, offset + params.pageSize - 1);
+  const { data, count, error } = await query
+    .order('last_checked_at', { ascending: false })
+    .order(RECRUIT_TALENT_SECONDARY_SORT, { ascending: true })
+    .range(offset, offset + params.pageSize - 1);
   if (error) {
     // Do not expose database error details or config to the third-party caller.
     console.error('recruit_talent_feed_query_failed', error.code ?? 'unknown');

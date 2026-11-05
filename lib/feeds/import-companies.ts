@@ -108,7 +108,7 @@ export const companyImportSchema = z
     is_active: z.boolean().nullish(),
     // Free-form metadata bag; the well-known keys below are also accepted as
     // top-level shortcuts and folded into metadata.
-    metadata: z.record(z.unknown()).default({}),
+    metadata: z.record(z.string(), z.unknown()).default({}),
     country: z.string().trim().min(1).nullish(),
     website_url: z.string().trim().min(1).nullish(),
     careers_url: z.string().trim().min(1).nullish(),
@@ -118,8 +118,8 @@ export const companyImportSchema = z
     // `company_job_source` describes the resolved source path the careers-portal
     // provider should follow. Stored verbatim as nested objects.
     job_portal_url: z.string().trim().min(1).nullish(),
-    career_url_validation: z.record(z.unknown()).nullish(),
-    company_job_source: z.record(z.unknown()).nullish(),
+    career_url_validation: z.record(z.string(), z.unknown()).nullish(),
+    company_job_source: z.record(z.string(), z.unknown()).nullish(),
     ats_type: z.string().trim().min(1).nullish(),
     ats_slug: z.string().trim().min(1).nullish(),
     source_status: z.string().trim().min(1).nullish(),
