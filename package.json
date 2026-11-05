@@ -29,7 +29,8 @@
     "smoke:company-card-label": "tsx scripts/company-card-label-smoke.ts",
     "smoke:fetch-pipeline": "tsx scripts/fetch-pipeline-smoke.ts",
     "smoke:compensation": "tsx scripts/compensation-smoke.ts",
-    "smoke:recruiter-intel": "tsx scripts/recruiter-intel-smoke.ts"
+    "smoke:recruiter-intel": "tsx scripts/recruiter-intel-smoke.ts",
+    "smoke:recruit-talent": "tsx scripts/recruit-talent-feed-smoke.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",

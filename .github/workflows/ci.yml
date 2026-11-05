@@ -31,3 +31,6 @@ jobs:
 
       - name: Typecheck
         run: npm run typecheck
+
+      - name: Recruit Talent feed smoke test
+        run: npm run smoke:recruit-talent
